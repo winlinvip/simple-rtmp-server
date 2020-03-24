@@ -178,7 +178,7 @@ srs_error_t SrsFastStream::grow(ISrsReader* reader, int required_size)
         if ((err = reader->read(end, nb_free_space, &nread)) != srs_success) {
             return srs_error_wrap(err, "read bytes");
         }
-        
+
 #ifdef SRS_PERF_MERGED_READ
         /**
          * to improve read performance, merge some packets then read,

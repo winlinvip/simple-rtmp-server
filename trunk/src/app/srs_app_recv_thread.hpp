@@ -155,6 +155,7 @@ private:
     bool mr;
     int mr_fd;
     srs_utime_t mr_sleep;
+    srs_utime_t mr_always;
     // For realtime
     // @see https://github.com/ossrs/srs/issues/257
     bool realtime;

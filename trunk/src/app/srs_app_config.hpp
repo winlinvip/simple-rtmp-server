@@ -576,6 +576,9 @@ public:
     // @param vhost, the vhost to get the mr sleep time.
     // TODO: FIXME: add utest for mr config.
     virtual srs_utime_t get_mr_sleep(std::string vhost);
+    // Get the mr always sleep time.
+    // TODO: FIXME: add utest for mr config.
+    virtual srs_utime_t get_mr_always(std::string vhost);
     // Get the mw sleep time in srs_utime_t for vhost.
     // @param vhost, the vhost to get the mw sleep time.
     // TODO: FIXME: add utest for mw config.

@@ -25,6 +25,7 @@
 #define SRS_CORE_PERFORMANCE_HPP
 
 #include <srs_core.hpp>
+#include <srs_core_time.hpp>
 
 /**
  * this file defines the perfromance options.
@@ -57,6 +58,9 @@
 // the default config of mr.
 #define SRS_PERF_MR_ENABLED false
 #define SRS_PERF_MR_SLEEP (350 * SRS_UTIME_MILLISECONDS)
+#define SRS_PERF_MR_SLEEP_MAX (3000 * SRS_UTIME_MILLISECONDS)
+#define SRS_PERF_MR_ALWAYS (100 * SRS_UTIME_MILLISECONDS)
+#define SRS_PERF_MR_ALWAYS_MAX (500 * SRS_UTIME_MILLISECONDS)
 
 /**
  * the MW(merged-write) send cache time in srs_utime_t.

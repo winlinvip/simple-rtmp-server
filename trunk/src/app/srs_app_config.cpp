@@ -3703,7 +3703,7 @@ srs_error_t SrsConfig::check_normal_config()
             } else if (n == "publish") {
                 for (int j = 0; j < (int)conf->directives.size(); j++) {
                     string m = conf->at(j)->name;
-                    if (m != "mr" && m != "mr_latency" && m != "firstpkt_timeout" && m != "normal_timeout" && m != "parse_sps") {
+                    if (m != "mr" && m != "mr_latency" && m != "firstpkt_timeout" && m != "normal_timeout" && m != "parse_sps" && m != "mr_always") {
                         return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal vhost.publish.%s of %s", m.c_str(), vhost->arg0().c_str());
                     }
                 }
@@ -4658,7 +4658,31 @@ srs_utime_t SrsConfig::get_mr_sleep(string vhost)
         return DEFAULT;
     }
     
-    return (srs_utime_t)(::atoi(conf->arg0().c_str()) * SRS_UTIME_MILLISECONDS);
+    srs_utime_t mr_latency = (srs_utime_t)(::atoi(conf->arg0().c_str()) * SRS_UTIME_MILLISECONDS);
+    return srs_min(mr_latency, SRS_PERF_MR_SLEEP_MAX);
+}
+
+srs_utime_t SrsConfig::get_mr_always(string vhost)
+{
+    static srs_utime_t DEFAULT = SRS_PERF_MR_ALWAYS;
+
+    SrsConfDirective* conf = get_vhost(vhost);
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("publish");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("mr_always");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    srs_utime_t mr_always = (srs_utime_t)(::atoi(conf->arg0().c_str()) * SRS_UTIME_MILLISECONDS);
+    return srs_min(mr_always, SRS_PERF_MR_ALWAYS_MAX);
 }
 
 srs_utime_t SrsConfig::get_mw_sleep(string vhost)

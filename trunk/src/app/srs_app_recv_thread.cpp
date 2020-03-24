@@ -295,7 +295,8 @@ SrsPublishRecvThread::SrsPublishRecvThread(SrsRtmpServer* rtmp_sdk, SrsRequest* 
     // @see https://github.com/ossrs/srs/issues/241
     mr = _srs_config->get_mr_enabled(req->vhost);
     mr_sleep = _srs_config->get_mr_sleep(req->vhost);
-    
+    mr_always = _srs_config->get_mr_always(req->vhost);
+
     realtime = _srs_config->get_realtime_enabled(req->vhost);
     
     _srs_config->subscribe(this);
@@ -457,7 +458,7 @@ void SrsPublishRecvThread::on_read(ssize_t nread)
         return;
     }
     
-    if (nread < 0 || mr_sleep <= 0) {
+    if (nread < 0 || (mr_sleep <= 0 && mr_always <= 0)) {
         return;
     }
     
@@ -469,6 +470,8 @@ void SrsPublishRecvThread::on_read(ssize_t nread)
      */
     if (nread < SRS_MR_SMALL_BYTES) {
         srs_usleep(mr_sleep);
+    } else if (mr_always > 0) {
+        srs_usleep(mr_always);
     }
 }
 #endif
