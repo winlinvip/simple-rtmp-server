@@ -212,7 +212,7 @@ void SrsFastVector::push_back(SrsSharedPtrMessage* msg)
 {
     // increase vector.
     if (count >= nb_msgs) {
-        int size = srs_max(SRS_PERF_MW_MSGS * 8, nb_msgs * 2);
+        int size = nb_msgs + SRS_PERF_MW_MSGS;
         SrsSharedPtrMessage** buf = new SrsSharedPtrMessage*[size];
         for (int i = 0; i < nb_msgs; i++) {
             buf[i] = msgs[i];
@@ -268,7 +268,7 @@ void SrsMessageQueue::set_queue_size(srs_utime_t queue_size)
 srs_error_t SrsMessageQueue::enqueue(SrsSharedPtrMessage* msg, bool* is_overflow)
 {
     srs_error_t err = srs_success;
-    
+
     if (msg->is_av()) {
         if (av_start_time == -1) {
             av_start_time = srs_utime_t(msg->timestamp * SRS_UTIME_MILLISECONDS);
@@ -278,7 +278,7 @@ srs_error_t SrsMessageQueue::enqueue(SrsSharedPtrMessage* msg, bool* is_overflow
     }
     
     msgs.push_back(msg);
-    
+
     while (av_end_time - av_start_time > max_queue_size) {
         // notice the caller queue already overflow and shrinked.
         if (is_overflow) {
@@ -2547,7 +2547,7 @@ srs_error_t SrsSource::create_consumer(SrsConnection* conn, SrsConsumer*& consum
 
     // print status.
     if (dg) {
-        srs_trace("create consumer, active=%d, queue_size=%.2f, jitter=%d", hub->active(), queue_size, jitter_algorithm);
+        srs_trace("create consumer, active=%d, queue_size=%dms, jitter=%d", hub->active(), srsu2msi(queue_size), jitter_algorithm);
     } else {
         srs_trace("create consumer, active=%d, ignore gop cache, jitter=%d", hub->active(), jitter_algorithm);
     }

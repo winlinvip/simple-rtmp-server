@@ -85,25 +85,6 @@
 // always use fmt0 as cache.
 #define SRS_CONSTS_RTMP_MAX_FMT3_HEADER_SIZE 5
 
-// For performance issue,
-// the iovs cache, @see https://github.com/ossrs/srs/issues/194
-// iovs cache for multiple messages for each connections.
-// suppose the chunk size is 64k, each message send in a chunk which needs only 2 iovec,
-// so the iovs max should be (SRS_PERF_MW_MSGS * 2)
-//
-// @remark, SRS will realloc when the iovs not enough.
-#define SRS_CONSTS_IOVS_MAX (SRS_PERF_MW_MSGS * 2)
-// For performance issue,
-// the c0c3 cache, @see https://github.com/ossrs/srs/issues/194
-// c0c3 cache for multiple messages for each connections.
-// each c0 <= 16byes, suppose the chunk size is 64k,
-// each message send in a chunk which needs only a c0 header,
-// so the c0c3 cache should be (SRS_PERF_MW_MSGS * 16)
-//
-// @remark, SRS will try another loop when c0c3 cache dry, for we cannot realloc it.
-//       so we use larger c0c3 cache, that is (SRS_PERF_MW_MSGS * 32)
-#define SRS_CONSTS_C0C3_HEADERS_MAX (SRS_PERF_MW_MSGS * 32)
-
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////
