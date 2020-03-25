@@ -433,21 +433,25 @@ fi
 # build gperf code
 #####################################################################################
 if [ $SRS_GPERF = YES ]; then
+    GPERF_OPTIONS=""
+    if [[ $SRS_GPERF_MC == YES || $SRS_GPERF_MD == YES || $SRS_GPERF_MP == YES || $SRS_GPERF_CP == YES ]]; then
+        GPERF_OPTIONS="--enable-frame-pointers";
+    fi
     if [[ -f ${SRS_OBJS}/gperf/bin/pprof ]]; then
-        echo "The gperftools-2.1 is ok.";
+        echo "The gperftools-2.7.90 is ok.";
     else
-        echo "Build gperftools-2.1";
+        echo "Build gperftools-2.7.90";
         (
-            rm -rf ${SRS_OBJS}/gperftools-2.1 && cd ${SRS_OBJS} && 
-            unzip -q ../3rdparty/gperftools-2.1.zip && cd gperftools-2.1 &&
-            ./configure --prefix=`pwd`/_release --enable-frame-pointers && make ${SRS_JOBS} && make install &&
-            cd .. && rm -rf gperf && ln -sf gperftools-2.1/_release gperf &&
+            rm -rf ${SRS_OBJS}/gperftools-2.7.90 && cd ${SRS_OBJS} &&
+            tar xf ../3rdparty/gperftools-2.7.90.tar.gz && cd gperftools-2.7.90 &&
+            ./configure --prefix=`pwd`/_release ${GPERF_OPTIONS} && make ${SRS_JOBS} && make install &&
+            cd .. && rm -rf gperf && ln -sf gperftools-2.7.90/_release gperf &&
             rm -rf pprof && ln -sf gperf/bin/pprof pprof
         )
     fi
     # check status
-    ret=$?; if [[ $ret -ne 0 ]]; then echo "Build gperftools-2.1 failed, ret=$ret"; exit $ret; fi
-    if [ ! -f ${SRS_OBJS}/gperf/bin/pprof ]; then echo "Build gperftools-2.1 failed."; exit -1; fi
+    ret=$?; if [[ $ret -ne 0 ]]; then echo "Build gperftools-2.7.90 failed, ret=$ret"; exit $ret; fi
+    if [ ! -f ${SRS_OBJS}/gperf/bin/pprof ]; then echo "Build gperftools-2.7.90 failed."; exit -1; fi
 fi
 
 #####################################################################################

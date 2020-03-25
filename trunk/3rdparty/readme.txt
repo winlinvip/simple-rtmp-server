@@ -30,8 +30,9 @@ tools/ccache-3.1.9.zip
 gtest-1.6.0.zip
     google test framework.
     
-gperftools-2.1.zip
+gperftools-2.7.90
     gperf tools for performance benchmark.
+    https://github.com/gperftools/gperftools
 
 state-threads-1.9.1.tar.gz:
     patched st from https://github.com/ossrs/state-threads/releases/tag/v1.9.1

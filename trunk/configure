@@ -153,7 +153,14 @@ fi
 # gperftools-2.1, for mem check and mem/cpu profile
 LibGperfRoot=""; LibGperfFile=""
 if [ $SRS_GPERF = YES ]; then
-    LibGperfRoot="${SRS_OBJS_DIR}/gperf/include"; LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_and_profiler.a";
+    LibGperfRoot="${SRS_OBJS_DIR}/gperf/include";
+    # If you'd rather link in a version of TCMalloc that does not include the heap profiler and checker (perhaps to
+    # reduce binary size for a static binary), you can link in libtcmalloc_minimal instead.
+    # @see https://gperftools.github.io/gperftools/tcmalloc.html
+    LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_minimal.a";
+fi
+if [[ $SRS_GPERF_MC == YES || $SRS_GPERF_MD == YES || $SRS_GPERF_MP == YES || $SRS_GPERF_CP == YES ]]; then
+    LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_and_profiler.a";
 fi
 if [ $SRS_GPERF_MD = YES ]; then
     LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_debug.a";
@@ -224,7 +231,7 @@ fi
 if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     MODULE_ID="APP" 
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL" "SERVICE")
-    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibSSLRoot})
+    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibSSLRoot} ${LibGperfRoot})
     MODULE_FILES=("srs_app_server" "srs_app_conn" "srs_app_rtmp_conn" "srs_app_source" 
             "srs_app_refer" "srs_app_hls" "srs_app_forward" "srs_app_encoder" "srs_app_http_stream"
             "srs_app_thread" "srs_app_bandwidth" "srs_app_st" "srs_app_log" "srs_app_config" 
