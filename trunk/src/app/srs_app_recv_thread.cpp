@@ -295,7 +295,8 @@ SrsPublishRecvThread::SrsPublishRecvThread(SrsRtmpServer* rtmp_sdk, SrsRequest* 
     // @see https://github.com/ossrs/srs/issues/241
     mr = _srs_config->get_mr_enabled(req->vhost);
     mr_sleep = _srs_config->get_mr_sleep(req->vhost);
-    
+    mr_buffer = _srs_config->get_mr_buffer(req->vhost);
+
     realtime = _srs_config->get_realtime_enabled(req->vhost);
     
     _srs_config->subscribe(this);
@@ -423,7 +424,7 @@ void SrsPublishRecvThread::on_start()
 #ifdef SRS_PERF_MERGED_READ
     if (mr) {
         // set underlayer buffer size
-        set_socket_buffer(mr_sleep);
+        set_socket_buffer(mr_sleep, mr_buffer);
         
         // disable the merge read
         // @see https://github.com/ossrs/srs/issues/241
@@ -485,10 +486,11 @@ srs_error_t SrsPublishRecvThread::on_reload_vhost_publish(string vhost)
     // @see https://github.com/ossrs/srs/issues/241
     bool mr_enabled = _srs_config->get_mr_enabled(req->vhost);
     srs_utime_t sleep_v = _srs_config->get_mr_sleep(req->vhost);
-    
+    int buffer_v = _srs_config->get_mr_buffer(req->vhost);
+
     // update buffer when sleep ms changed.
-    if (mr_sleep != sleep_v) {
-        set_socket_buffer(sleep_v);
+    if (mr_sleep != sleep_v || mr_buffer != buffer_v) {
+        set_socket_buffer(sleep_v, buffer_v);
     }
     
 #ifdef SRS_PERF_MERGED_READ
@@ -509,6 +511,7 @@ srs_error_t SrsPublishRecvThread::on_reload_vhost_publish(string vhost)
     // update to new state
     mr = mr_enabled;
     mr_sleep = sleep_v;
+    mr_buffer = buffer_v;
     
     return err;
 }
@@ -528,7 +531,7 @@ srs_error_t SrsPublishRecvThread::on_reload_vhost_realtime(string vhost)
     return err;
 }
 
-void SrsPublishRecvThread::set_socket_buffer(srs_utime_t sleep_v)
+void SrsPublishRecvThread::set_socket_buffer(srs_utime_t sleep_v, int buffer_v)
 {
     // the bytes:
     //      4KB=4096, 8KB=8192, 16KB=16384, 32KB=32768, 64KB=65536,
@@ -541,7 +544,17 @@ void SrsPublishRecvThread::set_socket_buffer(srs_utime_t sleep_v)
     //      2000*3000/8=750000B(about 732KB).
     //      2000*5000/8=1250000B(about 1220KB).
     int kbps = 5000;
-    int socket_buffer_size = srsu2msi(sleep_v) * kbps / 8;
+    int socket_buffer_size = buffer_v;
+
+    // Guess buffer size by mr_sleep.
+    if (buffer_v <= 0) {
+        socket_buffer_size = srsu2msi(sleep_v) * kbps / 8;
+    }
+
+    // If MR enabled, we always set to a default buffer.
+    if (socket_buffer_size <= 0) {
+        socket_buffer_size = srsu2msi(SRS_PERF_MR_SLEEP) * kbps / 8;
+    }
     
     int fd = mr_fd;
     int onb_rbuf = 0;
@@ -555,8 +568,8 @@ void SrsPublishRecvThread::set_socket_buffer(srs_utime_t sleep_v)
     }
     getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &nb_rbuf, &sock_buf_size);
     
-    srs_trace("mr change sleep %d=>%d, erbuf=%d, rbuf %d=>%d, sbytes=%d, realtime=%d",
-              srsu2msi(mr_sleep), srsu2msi(sleep_v), socket_buffer_size, onb_rbuf, nb_rbuf,
+    srs_trace("mr change sleep %d=>%d, buffer %d=>%d, erbuf=%d, rbuf %d=>%d, sbytes=%d, realtime=%d",
+              srsu2msi(mr_sleep), srsu2msi(sleep_v), mr_buffer, buffer_v, socket_buffer_size, onb_rbuf, nb_rbuf,
               SRS_MR_SMALL_BYTES, realtime);
     
     rtmp->set_recv_buffer(nb_rbuf);

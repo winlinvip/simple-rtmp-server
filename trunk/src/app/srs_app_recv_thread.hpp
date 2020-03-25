@@ -155,6 +155,7 @@ private:
     bool mr;
     int mr_fd;
     srs_utime_t mr_sleep;
+    int mr_buffer;
     // For realtime
     // @see https://github.com/ossrs/srs/issues/257
     bool realtime;
@@ -201,7 +202,7 @@ public:
     virtual srs_error_t on_reload_vhost_publish(std::string vhost);
     virtual srs_error_t on_reload_vhost_realtime(std::string vhost);
 private:
-    virtual void set_socket_buffer(srs_utime_t sleep_v);
+    virtual void set_socket_buffer(srs_utime_t sleep_v, int buffer_v);
 };
 
 // The HTTP receive thread, try to read messages util EOF.

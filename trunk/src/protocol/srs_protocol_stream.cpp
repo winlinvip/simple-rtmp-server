@@ -34,9 +34,9 @@
 #define SRS_DEFAULT_RECV_BUFFER_SIZE 131072
 
 // limit user-space buffer to 256KB, for 3Mbps stream delivery.
-//      800*2000/8=200000B(about 195KB).
+//      3000*2000/8=750000(about 800KB).
 // @remark it's ok for higher stream, the buffer is ok for one chunk is 256KB.
-#define SRS_MAX_SOCKET_BUFFER 262144
+#define SRS_MAX_SOCKET_BUFFER 819200
 
 // the max header size,
 // @see SrsProtocol::read_message_header().
@@ -62,6 +62,8 @@ SrsFastStream::SrsFastStream(int size)
     nb_buffer = size? size:SRS_DEFAULT_RECV_BUFFER_SIZE;
     buffer = (char*)malloc(nb_buffer);
     p = end = buffer;
+
+    fully = false;
 }
 
 SrsFastStream::~SrsFastStream()
@@ -103,6 +105,16 @@ void SrsFastStream::set_buffer(int buffer_size)
     nb_buffer = nb_resize_buf;
     p = buffer + start;
     end = p + nb_bytes;
+}
+
+void SrsFastStream::set_read_fully(bool v)
+{
+    fully = v;
+}
+
+bool SrsFastStream::read_fully()
+{
+    return fully;
 }
 
 char SrsFastStream::read_1byte()
@@ -171,14 +183,23 @@ srs_error_t SrsFastStream::grow(ISrsReader* reader, int required_size)
             return srs_error_new(ERROR_READER_BUFFER_OVERFLOW, "overflow, required=%d, max=%d, left=%d", required_size, nb_buffer, nb_free_space);
         }
     }
+
+    // Use read fully if possible.
+    ISrsProtocolReader* pr = dynamic_cast<ISrsProtocolReader*>(reader);
     
     // buffer is ok, read required size of bytes.
     while (end - p < required_size) {
         ssize_t nread;
-        if ((err = reader->read(end, nb_free_space, &nread)) != srs_success) {
-            return srs_error_wrap(err, "read bytes");
+        if (fully && pr) {
+            if ((err = pr->read_fully(end, nb_free_space, &nread)) != srs_success) {
+                return srs_error_wrap(err, "read fully");
+            }
+        } else {
+            if ((err = reader->read(end, nb_free_space, &nread)) != srs_success) {
+                return srs_error_wrap(err, "read bytes");
+            }
         }
-        
+
 #ifdef SRS_PERF_MERGED_READ
         /**
          * to improve read performance, merge some packets then read,

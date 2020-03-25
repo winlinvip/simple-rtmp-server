@@ -83,6 +83,8 @@ private:
     char* buffer;
     // the size of buffer.
     int nb_buffer;
+    // Whether read fully.
+    bool fully;
 public:
     // If buffer is 0, use default size.
     SrsFastStream(int size=0);
@@ -106,6 +108,9 @@ public:
      * @see https://github.com/ossrs/srs/issues/241
      */
     virtual void set_buffer(int buffer_size);
+    // Whether read fully.
+    virtual void set_read_fully(bool v);
+    virtual bool read_fully();
 public:
     /**
      * read 1byte from buffer, move to next bytes.

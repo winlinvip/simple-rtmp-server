@@ -57,6 +57,7 @@
 // the default config of mr.
 #define SRS_PERF_MR_ENABLED false
 #define SRS_PERF_MR_SLEEP (350 * SRS_UTIME_MILLISECONDS)
+#define SRS_PERF_MR_BUFFER 409600
 
 /**
  * the MW(merged-write) send cache time in srs_utime_t.

@@ -1324,6 +1324,7 @@ srs_error_t SrsProtocol::on_recv_message(SrsCommonMessage* msg)
             break;
         case RTMP_MSG_VideoMessage:
         case RTMP_MSG_AudioMessage:
+            in_buffer->set_read_fully(true);
             print_debug_info();
         default:
             return err;
@@ -1511,8 +1512,8 @@ void SrsProtocol::print_debug_info()
 {
     if (show_debug_info) {
         show_debug_info = false;
-        srs_trace("protocol in.buffer=%d, in.ack=%d, out.ack=%d, in.chunk=%d, out.chunk=%d", in_buffer_length,
-                  in_ack_size.window, out_ack_size.window, in_chunk_size, out_chunk_size);
+        srs_trace("protocol in.buffer=%d/%d, in.ack=%d, out.ack=%d, in.chunk=%d, out.chunk=%d",
+            in_buffer_length, in_buffer->read_fully(), in_ack_size.window, out_ack_size.window, in_chunk_size, out_chunk_size);
     }
 }
 
