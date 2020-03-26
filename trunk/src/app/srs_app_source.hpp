@@ -111,7 +111,7 @@ public:
     virtual SrsSharedPtrMessage* at(int index);
     virtual void clear();
     virtual void erase(int _begin, int _end);
-    virtual void push_back(SrsSharedPtrMessage* msg);
+    inline void push_back(SrsSharedPtrMessage* msg);
     virtual void free();
 };
 #endif
@@ -149,7 +149,7 @@ public:
     // Enqueue the message, the timestamp always monotonically.
     // @param msg, the msg to enqueue, user never free it whatever the return code.
     // @param is_overflow, whether overflow and shrinked. NULL to ignore.
-    virtual srs_error_t enqueue(SrsSharedPtrMessage* msg, bool* is_overflow = NULL);
+    srs_error_t enqueue(SrsSharedPtrMessage* msg, bool* is_overflow);
     // Get packets in consumer queue.
     // @pmsgs SrsSharedPtrMessage*[], used to store the msgs, user must alloc it.
     // @count the count in array, output param.

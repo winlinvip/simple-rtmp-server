@@ -643,7 +643,7 @@ srs_error_t SrsEdgeForwarder::proxy(SrsCommonMessage* msg)
     }
     
     copy.stream_id = sdk->sid();
-    if ((err = queue->enqueue(copy.copy())) != srs_success) {
+    if ((err = queue->enqueue(copy.copy(), NULL)) != srs_success) {
         return srs_error_wrap(err, "enqueue message");
     }
     

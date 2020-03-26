@@ -355,7 +355,7 @@ public:
 private:
     // Send out the messages, donot free it,
     // The caller must free the param msgs.
-    virtual srs_error_t do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs);
+    inline srs_error_t do_send_messages(SrsSharedPtrMessage** msgs, int nb_msgs);
     // Send iovs. send multiple times if exceed limits.
     virtual srs_error_t do_iovs_send(iovec* iovs, int size);
     // The underlayer api for send and free packet.

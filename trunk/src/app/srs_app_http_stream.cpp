@@ -172,7 +172,7 @@ srs_error_t SrsBufferCache::cycle()
         // free the messages.
         for (int i = 0; i < count; i++) {
             SrsSharedPtrMessage* msg = msgs.msgs[i];
-            queue->enqueue(msg);
+            queue->enqueue(msg, NULL);
         }
     }
     

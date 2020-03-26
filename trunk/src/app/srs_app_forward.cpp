@@ -120,7 +120,7 @@ srs_error_t SrsForwarder::on_meta_data(SrsSharedPtrMessage* shared_metadata)
         return srs_error_wrap(err, "jitter");
     }
     
-    if ((err = queue->enqueue(metadata)) != srs_success) {
+    if ((err = queue->enqueue(metadata, NULL)) != srs_success) {
         return srs_error_wrap(err, "enqueue metadata");
     }
     
@@ -143,7 +143,7 @@ srs_error_t SrsForwarder::on_audio(SrsSharedPtrMessage* shared_audio)
         sh_audio = msg->copy();
     }
     
-    if ((err = queue->enqueue(msg)) != srs_success) {
+    if ((err = queue->enqueue(msg, NULL)) != srs_success) {
         return srs_error_wrap(err, "enqueue audio");
     }
     
@@ -166,7 +166,7 @@ srs_error_t SrsForwarder::on_video(SrsSharedPtrMessage* shared_video)
         sh_video = msg->copy();
     }
     
-    if ((err = queue->enqueue(msg)) != srs_success) {
+    if ((err = queue->enqueue(msg, NULL)) != srs_success) {
         return srs_error_wrap(err, "enqueue video");
     }
     
