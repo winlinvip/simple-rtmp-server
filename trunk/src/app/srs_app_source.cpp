@@ -150,7 +150,6 @@ int64_t SrsRtmpJitter::get_time()
     return last_pkt_correct_time;
 }
 
-#ifdef SRS_PERF_QUEUE_FAST_VECTOR
 SrsFastVector::SrsFastVector()
 {
     count = 0;
@@ -169,6 +168,11 @@ int SrsFastVector::size()
     return count;
 }
 
+int SrsFastVector::capacity()
+{
+    return nb_msgs;
+}
+
 int SrsFastVector::begin()
 {
     return 0;
@@ -177,11 +181,6 @@ int SrsFastVector::begin()
 int SrsFastVector::end()
 {
     return count;
-}
-
-SrsSharedPtrMessage** SrsFastVector::data()
-{
-    return msgs;
 }
 
 SrsSharedPtrMessage* SrsFastVector::at(int index)
@@ -236,7 +235,83 @@ void SrsFastVector::free()
     }
     count = 0;
 }
-#endif
+
+void SrsFastVector::dump_packets(SrsSharedPtrMessage** pmsgs, int limit)
+{
+    srs_assert(limit <= count);
+
+    for (int i = 0; i < limit; i++) {
+        pmsgs[i] = msgs[i];
+    }
+}
+
+SrsSimpleVector::SrsSimpleVector()
+{
+    msgs.reserve(8);
+}
+
+SrsSimpleVector::~SrsSimpleVector()
+{
+    free();
+}
+
+int SrsSimpleVector::size()
+{
+    return msgs.size();
+}
+
+int SrsSimpleVector::capacity()
+{
+    return msgs.capacity();
+}
+
+int SrsSimpleVector::begin()
+{
+    return 0;
+}
+
+int SrsSimpleVector::end()
+{
+    return msgs.size();
+}
+
+SrsSharedPtrMessage* SrsSimpleVector::at(int index)
+{
+    return msgs.at(index);
+}
+
+void SrsSimpleVector::clear()
+{
+    msgs.clear();
+}
+
+void SrsSimpleVector::erase(int _begin, int _end)
+{
+    msgs.erase(msgs.begin() + _begin, msgs.begin() + _end);
+}
+
+void SrsSimpleVector::push_back(SrsSharedPtrMessage* msg)
+{
+    msgs.push_back(msg);
+}
+
+void SrsSimpleVector::free()
+{
+    for (vector<SrsSharedPtrMessage*>::iterator it = msgs.begin(); it != msgs.end(); ++it) {
+        SrsSharedPtrMessage* msg = *it;
+        srs_freep(msg);
+    }
+    msgs.clear();
+}
+
+void SrsSimpleVector::dump_packets(SrsSharedPtrMessage** pmsgs, int limit)
+{
+    srs_assert(limit <= (int)msgs.size());
+
+    for (int i = 0; i < limit; i++) {
+        pmsgs[i] = msgs[i];
+    }
+}
 
 SrsMessageQueue::SrsMessageQueue(bool ignore_shrink)
 {
@@ -302,13 +377,9 @@ srs_error_t SrsMessageQueue::dump_packets(int max_count, SrsSharedPtrMessage** p
     
     srs_assert(max_count > 0);
     count = srs_min(max_count, nb_msgs);
+    msgs.dump_packets(pmsgs, count);
     
-    SrsSharedPtrMessage** omsgs = msgs.data();
-    for (int i = 0; i < count; i++) {
-        pmsgs[i] = omsgs[i];
-    }
-    
-    SrsSharedPtrMessage* last = omsgs[count - 1];
+    SrsSharedPtrMessage* last = msgs.at(msgs.end() - 1);
     av_start_time = srs_utime_t(last->timestamp * SRS_UTIME_MILLISECONDS);
     
     if (count >= nb_msgs) {
@@ -334,10 +405,8 @@ srs_error_t SrsMessageQueue::dump_packets(SrsConsumer* consumer, bool atc, SrsRt
         return err;
     }
     
-    SrsSharedPtrMessage** omsgs = msgs.data();
     for (int i = 0; i < nb_msgs; i++) {
-        SrsSharedPtrMessage* msg = omsgs[i];
-        if ((err = consumer->enqueue(msg, atc, ag)) != srs_success) {
+        if ((err = consumer->enqueue(msgs.at(i), atc, ag)) != srs_success) {
             return srs_error_wrap(err, "consume message");
         }
     }

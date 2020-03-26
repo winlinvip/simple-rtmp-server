@@ -91,7 +91,6 @@ public:
     virtual int64_t get_time();
 };
 
-#ifdef SRS_PERF_QUEUE_FAST_VECTOR
 // To alloc and increase fixed space, fast remove and insert for msgs sender.
 // @see https://github.com/ossrs/srs/issues/251
 class SrsFastVector
@@ -105,16 +104,37 @@ public:
     virtual ~SrsFastVector();
 public:
     virtual int size();
+    virtual int capacity();
     virtual int begin();
     virtual int end();
-    virtual SrsSharedPtrMessage** data();
     virtual SrsSharedPtrMessage* at(int index);
     virtual void clear();
     virtual void erase(int _begin, int _end);
     virtual void push_back(SrsSharedPtrMessage* msg);
     virtual void free();
+    virtual void dump_packets(SrsSharedPtrMessage** pmsgs, int limit);
 };
-#endif
+
+// Simple vector version for SrsFastVector
+class SrsSimpleVector
+{
+private:
+    std::vector<SrsSharedPtrMessage*> msgs;
+public:
+    SrsSimpleVector();
+    virtual ~SrsSimpleVector();
+public:
+    virtual int size();
+    virtual int capacity();
+    virtual int begin();
+    virtual int end();
+    virtual SrsSharedPtrMessage* at(int index);
+    virtual void clear();
+    virtual void erase(int _begin, int _end);
+    virtual void push_back(SrsSharedPtrMessage* msg);
+    virtual void free();
+    virtual void dump_packets(SrsSharedPtrMessage** pmsgs, int limit);
+};
 
 // The message queue for the consumer(client), forwarder.
 // We limit the size in seconds, drop old messages(the whole gop) if full.
@@ -129,10 +149,10 @@ private:
     bool _ignore_shrink;
     // The max queue size, shrink if exceed it.
     srs_utime_t max_queue_size;
-#ifdef SRS_PERF_QUEUE_FAST_VECTOR
+#if defined(SRS_PERF_QUEUE_FAST_VECTOR)
     SrsFastVector msgs;
 #else
-    std::vector<SrsSharedPtrMessage*> msgs;
+    SrsSimpleVector msgs;
 #endif
 public:
     SrsMessageQueue(bool ignore_shrink = false);

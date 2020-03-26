@@ -28,6 +28,7 @@ using namespace std;
 #include <srs_app_fragment.hpp>
 #include <srs_app_security.hpp>
 #include <srs_app_config.hpp>
+#include <srs_app_source.hpp>
 
 #include <srs_app_st.hpp>
 
@@ -555,5 +556,525 @@ VOID TEST(AppSecurity, CheckSecurity)
     //       2. default to deny all when security enabled.
     //       3. allow if matches allow strategy.
     //       4. deny if matches deny strategy.
+}
+
+VOID TEST(AppSourceTest, FastVector)
+{
+    // Empty vector test.
+    if (true) {
+        SrsFastVector fv;
+        EXPECT_EQ(0, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(0, fv.end());
+    }
+
+    // With one elem.
+    if (true) {
+        SrsFastVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        EXPECT_EQ(1, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(1, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+
+        SrsSharedPtrMessage* msgs[1];
+        fv.dump_packets(msgs, (int)sizeof(msgs)/sizeof(SrsSharedPtrMessage*));
+        EXPECT_EQ(100, (int64_t)msgs[0]);
+
+        fv.clear();
+    }
+
+    // Not exceed capacity.
+    if (true) {
+        SrsFastVector fv;
+
+        int oc = fv.capacity();
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+            EXPECT_EQ(i + 1, fv.size());
+            EXPECT_EQ(oc, fv.capacity());
+            EXPECT_EQ(0, fv.begin());
+            EXPECT_EQ(i + 1, fv.end());
+            EXPECT_EQ(100+i, (int64_t)fv.at(i));
+        }
+
+        SrsSharedPtrMessage* msgs[oc];
+        fv.dump_packets(msgs, oc);
+        for (int i = 0; i < oc; i++) {
+            EXPECT_EQ(100 + i, (int64_t)msgs[i]);
+        }
+
+        fv.clear();
+    }
+
+    // Exceed Capacity.
+    if (true) {
+        SrsFastVector fv;
+
+        int oc = fv.capacity() + 1;
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+            EXPECT_EQ(i + 1, fv.size());
+            EXPECT_EQ(0, fv.begin());
+            EXPECT_EQ(i + 1, fv.end());
+            EXPECT_EQ(100+i, (int64_t)fv.at(i));
+        }
+
+        SrsSharedPtrMessage* msgs[oc];
+        fv.dump_packets(msgs, oc);
+        for (int i = 0; i < oc; i++) {
+            EXPECT_EQ(100 + i, (int64_t)msgs[i]);
+        }
+
+        EXPECT_TRUE(fv.capacity() > oc - 1);
+
+        fv.clear();
+    }
+
+    // One elem, erase one.
+    if (true) {
+        SrsSharedPtrMessage* msgs[1];
+
+        SrsFastVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        EXPECT_EQ(1, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(1, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+        fv.dump_packets(msgs, 1); EXPECT_EQ(100, (int64_t)msgs[0]);
+
+        fv.erase(0, 1);
+        EXPECT_EQ(0, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(0, fv.end());
+        fv.clear();
+    }
+
+    // Two elem, erase one.
+    if (true) {
+        SrsSharedPtrMessage* msgs[2];
+
+        SrsFastVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)101);
+        EXPECT_EQ(2, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(2, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+        EXPECT_EQ(101, (int64_t)fv.at(1));
+        fv.dump_packets(msgs, 2);
+        EXPECT_EQ(100, (int64_t)msgs[0]);
+        EXPECT_EQ(101, (int64_t)msgs[1]);
+
+        fv.erase(0, 1);
+        EXPECT_EQ(1, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(1, fv.end());
+        EXPECT_EQ(101, (int64_t)fv.at(0));
+        fv.dump_packets(msgs, 1);
+        EXPECT_EQ(101, (int64_t)msgs[0]);
+        fv.clear();
+    }
+
+    // Erase one, then append one.
+    if (true) {
+        SrsSharedPtrMessage* msgs[3];
+
+        SrsFastVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)101);
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)102);
+        EXPECT_EQ(3, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(3, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+        EXPECT_EQ(101, (int64_t)fv.at(1));
+        EXPECT_EQ(102, (int64_t)fv.at(2));
+        fv.dump_packets(msgs, 3);
+        EXPECT_EQ(100, (int64_t)msgs[0]);
+        EXPECT_EQ(101, (int64_t)msgs[1]);
+        EXPECT_EQ(102, (int64_t)msgs[2]);
+
+        fv.erase(0, 1);
+        EXPECT_EQ(2, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(2, fv.end());
+        EXPECT_EQ(101, (int64_t)fv.at(0));
+        EXPECT_EQ(102, (int64_t)fv.at(1));
+        fv.dump_packets(msgs, 2);
+        EXPECT_EQ(101, (int64_t)msgs[0]);
+        EXPECT_EQ(102, (int64_t)msgs[1]);
+
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)103);
+        EXPECT_EQ(3, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(3, fv.end());
+        EXPECT_EQ(101, (int64_t)fv.at(0));
+        EXPECT_EQ(102, (int64_t)fv.at(1));
+        EXPECT_EQ(103, (int64_t)fv.at(2));
+        fv.dump_packets(msgs, 3);
+        EXPECT_EQ(101, (int64_t)msgs[0]);
+        EXPECT_EQ(102, (int64_t)msgs[1]);
+        EXPECT_EQ(103, (int64_t)msgs[2]);
+
+        fv.clear();
+    }
+
+    // Erase one, then append one, then append 10.
+    if (true) {
+        SrsFastVector fv;
+
+        int oc = fv.capacity();
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+        }
+        EXPECT_EQ(oc, fv.capacity());
+        EXPECT_EQ(fv.capacity(), fv.size());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(fv.capacity(), fv.end());
+        for (int i = 0; i < oc; i++) {
+            EXPECT_EQ(100 + i, (int64_t)fv.at(i));
+        }
+
+        if (true) {
+            SrsSharedPtrMessage* msgs[oc];
+            fv.dump_packets(msgs, oc);
+            for (int i = 0; i < oc; i++) {
+                EXPECT_EQ(100 + i, (int64_t)msgs[i]);
+            }
+        }
+
+        // Erase one.
+        fv.erase(0, 1);
+        EXPECT_EQ(oc, fv.capacity());
+
+        // Append one.
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)10000);
+        EXPECT_EQ(oc, fv.capacity());
+        EXPECT_EQ(oc, fv.end());
+        EXPECT_EQ(10000, (int64_t)fv.at(fv.end() - 1));
+
+        if (true) {
+            SrsSharedPtrMessage* msgs[oc];
+            fv.dump_packets(msgs, oc);
+            EXPECT_EQ(10000, (int64_t)msgs[fv.end() - 1]); // oc == fv.end()
+        }
+
+        // Append 10 elem.
+        for (int i = 0; i < 10; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(20000 + i));
+            EXPECT_EQ(20000 + i, (int64_t)fv.at(oc + i));
+        }
+        EXPECT_TRUE(fv.capacity() > oc);
+
+        if (true) {
+            SrsSharedPtrMessage* msgs[oc+10];
+            fv.dump_packets(msgs, oc+10);
+
+            for (int i = 0; i < oc - 1; i++) {
+                EXPECT_EQ(101 + i, (int64_t)msgs[i]);
+            }
+            EXPECT_EQ(10000, (int64_t)msgs[oc-1]);
+
+            for (int i = 0; i < 10; i++) {
+                EXPECT_EQ(20000 + i, (int64_t)msgs[oc + i]);
+            }
+        }
+
+        fv.clear();
+    }
+
+    // Erase one, append one, for 2*capacity times.
+    if (true) {
+        SrsFastVector fv;
+
+        int oc = fv.capacity();
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+        }
+        EXPECT_EQ(oc, fv.capacity());
+
+        for (int j = 0; j < 10; j++) {
+            for (int i = 0; i < oc; i++) {
+                int64_t v = (int64_t)fv.at(0);
+                fv.erase(0, 1);
+                if (i != oc - 1) {
+                    EXPECT_EQ(v + 1, (int64_t)fv.at(0));
+                }
+                fv.push_back((SrsSharedPtrMessage*)(int64_t)v);
+            }
+        }
+
+        fv.clear();
+    }
+}
+
+VOID TEST(AppSourceTest, SimpleVector)
+{
+    // Empty vector test.
+    if (true) {
+        SrsSimpleVector fv;
+        EXPECT_EQ(0, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(0, fv.end());
+    }
+
+    // With one elem.
+    if (true) {
+        SrsSimpleVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        EXPECT_EQ(1, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(1, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+
+        SrsSharedPtrMessage* msgs[1];
+        fv.dump_packets(msgs, (int)sizeof(msgs)/sizeof(SrsSharedPtrMessage*));
+        EXPECT_EQ(100, (int64_t)msgs[0]);
+
+        fv.clear();
+    }
+
+    // Not exceed capacity.
+    if (true) {
+        SrsSimpleVector fv;
+
+        int oc = fv.capacity();
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+            EXPECT_EQ(i + 1, fv.size());
+            EXPECT_EQ(oc, fv.capacity());
+            EXPECT_EQ(0, fv.begin());
+            EXPECT_EQ(i + 1, fv.end());
+            EXPECT_EQ(100+i, (int64_t)fv.at(i));
+        }
+
+        SrsSharedPtrMessage* msgs[oc];
+        fv.dump_packets(msgs, oc);
+        for (int i = 0; i < oc; i++) {
+            EXPECT_EQ(100 + i, (int64_t)msgs[i]);
+        }
+
+        fv.clear();
+    }
+
+    // Exceed Capacity.
+    if (true) {
+        SrsSimpleVector fv;
+
+        int oc = fv.capacity() + 1;
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+            EXPECT_EQ(i + 1, fv.size());
+            EXPECT_EQ(0, fv.begin());
+            EXPECT_EQ(i + 1, fv.end());
+            EXPECT_EQ(100+i, (int64_t)fv.at(i));
+        }
+
+        SrsSharedPtrMessage* msgs[oc];
+        fv.dump_packets(msgs, oc);
+        for (int i = 0; i < oc; i++) {
+            EXPECT_EQ(100 + i, (int64_t)msgs[i]);
+        }
+
+        EXPECT_TRUE(fv.capacity() > oc - 1);
+
+        fv.clear();
+    }
+
+    // One elem, erase one.
+    if (true) {
+        SrsSharedPtrMessage* msgs[1];
+
+        SrsSimpleVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        EXPECT_EQ(1, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(1, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+        fv.dump_packets(msgs, 1); EXPECT_EQ(100, (int64_t)msgs[0]);
+
+        fv.erase(0, 1);
+        EXPECT_EQ(0, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(0, fv.end());
+        fv.clear();
+    }
+
+    // Two elem, erase one.
+    if (true) {
+        SrsSharedPtrMessage* msgs[2];
+
+        SrsSimpleVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)101);
+        EXPECT_EQ(2, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(2, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+        EXPECT_EQ(101, (int64_t)fv.at(1));
+        fv.dump_packets(msgs, 2);
+        EXPECT_EQ(100, (int64_t)msgs[0]);
+        EXPECT_EQ(101, (int64_t)msgs[1]);
+
+        fv.erase(0, 1);
+        EXPECT_EQ(1, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(1, fv.end());
+        EXPECT_EQ(101, (int64_t)fv.at(0));
+        fv.dump_packets(msgs, 1);
+        EXPECT_EQ(101, (int64_t)msgs[0]);
+        fv.clear();
+    }
+
+    // Erase one, then append one.
+    if (true) {
+        SrsSharedPtrMessage* msgs[3];
+
+        SrsSimpleVector fv;
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)100);
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)101);
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)102);
+        EXPECT_EQ(3, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(3, fv.end());
+        EXPECT_EQ(100, (int64_t)fv.at(0));
+        EXPECT_EQ(101, (int64_t)fv.at(1));
+        EXPECT_EQ(102, (int64_t)fv.at(2));
+        fv.dump_packets(msgs, 3);
+        EXPECT_EQ(100, (int64_t)msgs[0]);
+        EXPECT_EQ(101, (int64_t)msgs[1]);
+        EXPECT_EQ(102, (int64_t)msgs[2]);
+
+        fv.erase(0, 1);
+        EXPECT_EQ(2, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(2, fv.end());
+        EXPECT_EQ(101, (int64_t)fv.at(0));
+        EXPECT_EQ(102, (int64_t)fv.at(1));
+        fv.dump_packets(msgs, 2);
+        EXPECT_EQ(101, (int64_t)msgs[0]);
+        EXPECT_EQ(102, (int64_t)msgs[1]);
+
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)103);
+        EXPECT_EQ(3, fv.size());
+        EXPECT_EQ(8, fv.capacity());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(3, fv.end());
+        EXPECT_EQ(101, (int64_t)fv.at(0));
+        EXPECT_EQ(102, (int64_t)fv.at(1));
+        EXPECT_EQ(103, (int64_t)fv.at(2));
+        fv.dump_packets(msgs, 3);
+        EXPECT_EQ(101, (int64_t)msgs[0]);
+        EXPECT_EQ(102, (int64_t)msgs[1]);
+        EXPECT_EQ(103, (int64_t)msgs[2]);
+
+        fv.clear();
+    }
+
+    // Erase one, then append one, then append 10.
+    if (true) {
+        SrsSimpleVector fv;
+
+        int oc = fv.capacity();
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+        }
+        EXPECT_EQ(oc, fv.capacity());
+        EXPECT_EQ(fv.capacity(), fv.size());
+        EXPECT_EQ(0, fv.begin());
+        EXPECT_EQ(fv.capacity(), fv.end());
+        for (int i = 0; i < oc; i++) {
+            EXPECT_EQ(100 + i, (int64_t)fv.at(i));
+        }
+
+        if (true) {
+            SrsSharedPtrMessage* msgs[oc];
+            fv.dump_packets(msgs, oc);
+            for (int i = 0; i < oc; i++) {
+                EXPECT_EQ(100 + i, (int64_t)msgs[i]);
+            }
+        }
+
+        // Erase one.
+        fv.erase(0, 1);
+        EXPECT_EQ(oc, fv.capacity());
+
+        // Append one.
+        fv.push_back((SrsSharedPtrMessage*)(int64_t)10000);
+        EXPECT_EQ(oc, fv.capacity());
+        EXPECT_EQ(oc, fv.end());
+        EXPECT_EQ(10000, (int64_t)fv.at(fv.end() - 1));
+
+        if (true) {
+            SrsSharedPtrMessage* msgs[oc];
+            fv.dump_packets(msgs, oc);
+            EXPECT_EQ(10000, (int64_t)msgs[fv.end() - 1]); // oc == fv.end()
+        }
+
+        // Append 10 elem.
+        for (int i = 0; i < 10; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(20000 + i));
+            EXPECT_EQ(20000 + i, (int64_t)fv.at(oc + i));
+        }
+        EXPECT_TRUE(fv.capacity() > oc);
+
+        if (true) {
+            SrsSharedPtrMessage* msgs[oc+10];
+            fv.dump_packets(msgs, oc+10);
+
+            for (int i = 0; i < oc - 1; i++) {
+                EXPECT_EQ(101 + i, (int64_t)msgs[i]);
+            }
+            EXPECT_EQ(10000, (int64_t)msgs[oc-1]);
+
+            for (int i = 0; i < 10; i++) {
+                EXPECT_EQ(20000 + i, (int64_t)msgs[oc + i]);
+            }
+        }
+
+        fv.clear();
+    }
+
+    // Erase one, append one, for 2*capacity times.
+    if (true) {
+        SrsSimpleVector fv;
+
+        int oc = fv.capacity();
+        for (int i = 0; i < oc; i++) {
+            fv.push_back((SrsSharedPtrMessage*)(int64_t)(100 + i));
+        }
+        EXPECT_EQ(oc, fv.capacity());
+
+        for (int j = 0; j < 10; j++) {
+            for (int i = 0; i < oc; i++) {
+                int64_t v = (int64_t)fv.at(0);
+                fv.erase(0, 1);
+                if (i != oc - 1) {
+                    EXPECT_EQ(v + 1, (int64_t)fv.at(0));
+                }
+                fv.push_back((SrsSharedPtrMessage*)(int64_t)v);
+            }
+        }
+
+        fv.clear();
+    }
 }
 
