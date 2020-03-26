@@ -131,7 +131,7 @@ public:
     virtual SrsSharedPtrMessage* at(int index);
     virtual void clear();
     virtual void erase(int _begin, int _end);
-    virtual void push_back(SrsSharedPtrMessage* msg);
+    inline void push_back(SrsSharedPtrMessage* msg);
     virtual void free();
     virtual void dump_packets(SrsSharedPtrMessage** pmsgs, int limit);
 };
