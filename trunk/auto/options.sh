@@ -95,6 +95,8 @@ SRS_PURE_RTMP=NO
 SRS_DISABLE_ALL=NO
 # all features is on
 SRS_ENABLE_ALL=NO
+# Whether enable the compiler optimization.
+SRS_COMPILER_OPT=YES
 #
 #####################################################################################
 # Toolchain crossbuild for ARM or MIPS.
@@ -153,6 +155,7 @@ Performance:                @see https://blog.csdn.net/win_lin/article/details/5
   --with-gmp                Build memory profile for SRS with gperf tools.
   --with-gcp                Build cpu profile for SRS with gperf tools.
   --with-gprof              Build SRS with gprof(GNU profile tool).
+  --with-compiler-opt       Enable compiler optimization for SRS(-O2).
 
   --without-valgrind        Do not support valgrind for memory check.
   --without-gperf           Do not build SRS with gperf tools(without tcmalloc and gmd/gmc/gmp/gcp).
@@ -161,6 +164,7 @@ Performance:                @see https://blog.csdn.net/win_lin/article/details/5
   --without-gmp             Do not build memory profile for SRS with gperf tools.
   --without-gcp             Do not build cpu profile for SRS with gperf tools.
   --without-gprof           Do not build srs with gprof(GNU profile tool).
+  --without-compiler-opt    Disable compiler optimization for SRS(-O2).
 
 Toolchain options:          @see https://github.com/ossrs/srs/issues/1547#issuecomment-576078411
   --arm                     Enable crossbuild for ARM.
@@ -277,6 +281,8 @@ function parse_user_option() {
         --export-librtmp-single)        SRS_EXPORT_LIBRTMP_SINGLE=${value}      ;;
         --with-valgrind)                SRS_VALGRIND=YES            ;;
         --without-valgrind)             SRS_VALGRIND=NO             ;;
+        --with-compiler-opt)            SRS_COMPILER_OPT=YES        ;;
+        --without-compiler-opt)         SRS_COMPILER_OPT=NO         ;;
 
         --with-http-callback)           SRS_HTTP_CALLBACK=YES       ;;
         --with-http-api)                SRS_HTTP_API=YES            ;;
@@ -528,6 +534,7 @@ SRS_AUTO_CONFIGURE="--prefix=${SRS_PREFIX}"
     if [ $SRS_RESEARCH = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-research"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-research"; fi
     if [ $SRS_UTEST = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-utest"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-utest"; fi
     if [ $SRS_GPERF = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-gperf"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-gperf"; fi
+    if [ $SRS_COMPILER_OPT = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-compiler-opt"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-compiler-opt"; fi
     if [ $SRS_GPERF_MC = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-gmc"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-gmc"; fi
     if [ $SRS_GPERF_MD = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-gmd"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-gmd"; fi
     if [ $SRS_GPERF_MP = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-gmp"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-gmp"; fi

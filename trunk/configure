@@ -94,6 +94,9 @@ END
 # build tools or compiler args.
 # enable gdb debug
 GDBDebug=" -g -O0"
+if [[ $SRS_COMPILER_OPT == YES ]]; then
+    GDBDebug=" -g -O2"
+fi
 # the warning level.
 WarnLevel=" -Wall"
 # the compile standard.

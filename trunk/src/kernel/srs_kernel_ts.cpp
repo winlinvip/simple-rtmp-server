@@ -294,7 +294,8 @@ srs_error_t SrsTsContext::encode(ISrsStreamWriter* writer, SrsTsMessage* msg, Sr
 {
     srs_error_t err = srs_success;
     
-    SrsTsStream vs, as;
+    SrsTsStream vs = SrsTsStreamReserved;
+    SrsTsStream as = SrsTsStreamReserved;
     int16_t video_pid = 0, audio_pid = 0;
     switch (vc) {
         case SrsVideoCodecIdAVC:
