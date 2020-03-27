@@ -238,7 +238,6 @@ srs_error_t SrsForwarder::do_cycle()
     return err;
 }
 
-#define SYS_MAX_FORWARD_SEND_MSGS 128
 srs_error_t SrsForwarder::forward()
 {
     srs_error_t err = srs_success;
@@ -248,7 +247,7 @@ srs_error_t SrsForwarder::forward()
     SrsPithyPrint* pprint = SrsPithyPrint::create_forwarder();
     SrsAutoFree(SrsPithyPrint, pprint);
     
-    SrsMessageArray msgs(SYS_MAX_FORWARD_SEND_MSGS);
+    SrsMessageArray msgs(SRS_PERF_MW_MSGS);
     
     // update sequence header
     // TODO: FIXME: maybe need to zero the sequence header timestamp.

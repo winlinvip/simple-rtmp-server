@@ -551,8 +551,6 @@ srs_error_t SrsEdgeForwarder::cycle()
     return err;
 }
 
-#define SYS_MAX_EDGE_SEND_MSGS 128
-
 srs_error_t SrsEdgeForwarder::do_cycle()
 {
     srs_error_t err = srs_success;
@@ -562,7 +560,7 @@ srs_error_t SrsEdgeForwarder::do_cycle()
     SrsPithyPrint* pprint = SrsPithyPrint::create_edge();
     SrsAutoFree(SrsPithyPrint, pprint);
     
-    SrsMessageArray msgs(SYS_MAX_EDGE_SEND_MSGS);
+    SrsMessageArray msgs(SRS_PERF_MW_MSGS);
     
     while (true) {
         if ((err = trd->pull()) != srs_success) {

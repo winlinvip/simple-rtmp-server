@@ -98,7 +98,7 @@
  * for the mw sleep set to 1800, the msgs is about 133.
  * @remark, recomment to 128.
  */
-#define SRS_PERF_MW_MSGS 128
+#define SRS_PERF_MW_MSGS 256
 
 /**
  * whether set the socket send buffer size.
