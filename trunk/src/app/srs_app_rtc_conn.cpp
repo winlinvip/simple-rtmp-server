@@ -1661,8 +1661,14 @@ srs_error_t SrsRtcServer::cycle()
 
     uint64_t nn_msgs = 0;
     uint64_t nn_msgs_last = 0;
+    int nn_msgs_max = 0;
+    int nn_loop = 0;
+    int nn_wait = 0;
     srs_utime_t time_last = srs_get_system_time();
     SrsStatistic* stat = SrsStatistic::instance();
+
+    // We use FDs to send out messages, by round-trip algorithm.
+    uint32_t fd_index = 0;
 
     SrsPithyPrint* pprint = SrsPithyPrint::create_rtc_send();
     SrsAutoFree(SrsPithyPrint, pprint);
@@ -1672,9 +1678,12 @@ srs_error_t SrsRtcServer::cycle()
             return err;
         }
 
+        nn_loop++;
+
         int pos = cache_pos;
         if (pos <= 0) {
             waiting_msgs = true;
+            nn_wait++;
             srs_cond_wait(cond);
             continue;
         }
@@ -1683,12 +1692,13 @@ srs_error_t SrsRtcServer::cycle()
         cache.swap(hotspot);
         cache_pos = 0;
 
-        mmsghdr* p = &hotspot[0];
-        for (mmsghdr* end = p + pos; p < end; p += max_sendmmsg) {
+        srs_netfd_t stfd = mmstfd;
+        mmsghdr* p = &hotspot[0]; mmsghdr* end = p + pos;
+        for (; p < end; p += max_sendmmsg) {
             int vlen = (int)(end - p);
             vlen = srs_min(max_sendmmsg, vlen);
 
-            int r0 = srs_sendmmsg(mmstfd, p, (unsigned int)vlen, 0, SRS_UTIME_NO_TIMEOUT);
+            int r0 = srs_sendmmsg(stfd, p, (unsigned int)vlen, 0, SRS_UTIME_NO_TIMEOUT);
             if (r0 != vlen) {
                 srs_warn("sendmsg %d msgs, %d done", vlen, r0);
             }
@@ -1698,9 +1708,11 @@ srs_error_t SrsRtcServer::cycle()
 
         // Increase total messages.
         nn_msgs += pos;
+        nn_msgs_max = srs_max(pos, nn_msgs_max);
 
         pprint->elapse();
         if (pprint->can_print()) {
+            // TODO: FIXME: Extract a PPS calculator.
             int pps_average = 0; int pps_last = 0;
             if (true) {
                 if (srs_get_system_time() > srs_get_system_startup_time()) {
@@ -1710,8 +1722,18 @@ srs_error_t SrsRtcServer::cycle()
                     pps_last = (int)((nn_msgs - nn_msgs_last) * SRS_UTIME_SECONDS / (srs_get_system_time() - time_last));
                 }
             }
-            srs_trace("-> RTC SEND %d by sendmmsg %d, total %" PRId64 ", pps %d/%d", pos, max_sendmmsg, nn_msgs, pps_average, pps_last);
+
+            string pps_unit = "";
+            if (pps_last > 10000 || pps_average > 10000) {
+                pps_unit = "(w)"; pps_last /= 10000; pps_average /= 10000;
+            } else if (pps_last > 1000 || pps_average > 1000) {
+                pps_unit = "(k)"; pps_last /= 1000; pps_average /= 1000;
+            }
+
+            srs_trace("-> RTC #%d SEND %d, pps %d/%d%s, schedule %d/%d/%d, sessions %d by sendmmsg %d",
+                srs_netfd_fileno(stfd), pos, pps_average, pps_last, pps_unit.c_str(), nn_loop, nn_wait, nn_msgs_max, (int)map_username_session.size(), max_sendmmsg);
             nn_msgs_last = nn_msgs; time_last = srs_get_system_time();
+            nn_loop = nn_wait = nn_msgs_max = 0;
         }
     }
 
