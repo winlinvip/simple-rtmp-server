@@ -559,7 +559,15 @@ srs_error_t SrsRtcSenderThread::cycle()
             continue;
         }
 
-        send_and_free_messages(msgs.msgs, msg_count, sendonly_ukt);
+        int nn_rtp_pkts = 0;
+        int nn = 0;
+        send_and_free_messages(msgs.msgs, msg_count, sendonly_ukt, &nn_rtp_pkts, &nn);
+
+        pprint->elapse();
+        if (pprint->can_print()) {
+            // TODO: FIXME: Print stat like frame/s, packet/s, loss_packets.
+            srs_trace("-> RTC PLAY %d msgs, %d packets, %d bytes", msg_count, nn_rtp_pkts, nn);
+        }
     }
 }
 
@@ -572,7 +580,7 @@ void SrsRtcSenderThread::update_sendonly_socket(SrsUdpMuxSocket* ukt)
     sendonly_ukt = ukt->copy_sendonly();
 }
 
-void SrsRtcSenderThread::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, SrsUdpMuxSocket* udp_mux_skt)
+void SrsRtcSenderThread::send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, SrsUdpMuxSocket* udp_mux_skt, int* pnn_rtp_pkts, int* pnn)
 {
     if (!rtc_session->dtls_session) {
         return;
@@ -587,6 +595,9 @@ void SrsRtcSenderThread::send_and_free_messages(SrsSharedPtrMessage** msgs, int 
             SrsRtpSharedPacket* pkt = *it;
             send_and_free_message(msg, is_video, is_audio, pkt, udp_mux_skt);
         }
+
+        *pnn_rtp_pkts += msg->rtp_packets.size();
+        *pnn += msg->size;
 
         srs_freep(msg);
     }

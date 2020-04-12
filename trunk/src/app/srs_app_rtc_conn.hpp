@@ -143,7 +143,7 @@ public:
 public:
     void update_sendonly_socket(SrsUdpMuxSocket* ukt);
 private:
-    void send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, SrsUdpMuxSocket* udp_mux_skt);
+    void send_and_free_messages(SrsSharedPtrMessage** msgs, int nb_msgs, SrsUdpMuxSocket* udp_mux_skt, int* pnn_rtp_pkts, int* pnn);
     void send_and_free_message(SrsSharedPtrMessage* msg, bool is_video, bool is_audio, SrsRtpSharedPacket* pkt, SrsUdpMuxSocket* udp_mux_skt);
 };
 
