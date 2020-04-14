@@ -157,9 +157,8 @@ public:
     // Stat for packets merged written, nb_msgs is the number of RTMP messages,
     // bytes_msgs is the total bytes of RTMP messages, nb_iovs is the total number of iovec.
     virtual void perf_mw_on_msgs(int nb_msgs, int bytes_msgs, int nb_iovs) = 0;
-    // Stat for packets merged written, nb_pkts is the number of or chunk packets,
-    // bytes_pkts is the total bytes of or chunk packets, nb_iovs is the total number of iovec.
-    virtual void perf_mw_on_packets(int nb_pkts, int bytes_pkts, int nb_iovs) = 0;
+    // Stat for packets UDP sendmmsg, nb_msgs is the vlen for sendmmsg.
+    virtual void perf_sendmmsg_on_packets(int nb_msgs) = 0;
 };
 
 // The protocol provides the rtmp-message-protocol services,

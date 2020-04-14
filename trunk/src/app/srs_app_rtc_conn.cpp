@@ -524,6 +524,8 @@ srs_error_t SrsRtcSenderThread::cycle()
     SrsPithyPrint* pprint = SrsPithyPrint::create_rtc_play();
     SrsAutoFree(SrsPithyPrint, pprint);
 
+    SrsStatistic* stat = SrsStatistic::instance();
+
     while (true) {
         if ((err = trd->pull()) != srs_success) {
             return srs_error_wrap(err, "rtc sender thread");
@@ -562,6 +564,8 @@ srs_error_t SrsRtcSenderThread::cycle()
         int nn_rtp_pkts = 0;
         int nn = 0;
         send_and_free_messages(msgs.msgs, msg_count, sendonly_ukt, &nn_rtp_pkts, &nn);
+
+        stat->perf_mw_on_msgs(msg_count, nn, nn_rtp_pkts);
 
         pprint->elapse();
         if (pprint->can_print()) {
@@ -1458,7 +1462,7 @@ srs_error_t SrsRtcServer::cycle()
                 srs_warn("sendmsg %d msgs, %d done", vlen, r0);
             }
 
-            stat->perf_mw_on_packets(vlen);
+            stat->perf_sendmmsg_on_packets(vlen);
         }
 
         // Increase total messages.
