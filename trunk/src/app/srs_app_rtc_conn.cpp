@@ -572,7 +572,7 @@ srs_error_t SrsRtcSenderThread::cycle()
         // Stat the RAW RTP packets, which maybe group by GSO.
         stat->perf_on_rtp_packets(nn_rtp_pkts);
         // Stat the RTP packets going into kernel.
-        stat->perf_gso_on_packets(nn_rtp_pkts);
+        stat->perf_on_gso_packets(nn_rtp_pkts);
 
         pprint->elapse();
         if (pprint->can_print()) {
