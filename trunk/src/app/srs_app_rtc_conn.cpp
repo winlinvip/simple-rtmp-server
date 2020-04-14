@@ -565,7 +565,14 @@ srs_error_t SrsRtcSenderThread::cycle()
         int nn = 0;
         send_and_free_messages(msgs.msgs, msg_count, sendonly_ukt, &nn_rtp_pkts, &nn);
 
-        stat->perf_mw_on_msgs(msg_count, nn, nn_rtp_pkts);
+        // Stat the original RAW AV frame, maybe h264+aac.
+        stat->perf_on_msgs(msg_count);
+        // Stat the RTC packets, RAW AV frame, maybe h.264+opus.
+        stat->perf_on_rtc_packets(msg_count);
+        // Stat the RAW RTP packets, which maybe group by GSO.
+        stat->perf_on_rtp_packets(nn_rtp_pkts);
+        // Stat the RTP packets going into kernel.
+        stat->perf_gso_on_packets(nn_rtp_pkts);
 
         pprint->elapse();
         if (pprint->can_print()) {
