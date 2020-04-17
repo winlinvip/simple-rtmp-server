@@ -106,6 +106,7 @@ srs_error_t SrsRtpH264Muxer::filter(SrsSharedPtrMessage* shared_frame, SrsFormat
     }
 
     // Update samples to shared frame.
+    int nn_max_samples = 0;
     for (int i = 0; i < format->video->nb_samples; ++i) {
         SrsSample* sample = &format->video->samples[i];
 
@@ -119,6 +120,8 @@ srs_error_t SrsRtpH264Muxer::filter(SrsSharedPtrMessage* shared_frame, SrsFormat
                 continue;
             }
         }
+
+        nn_max_samples = srs_max(nn_max_samples, sample->size);
     }
 
     if (format->video->nb_samples <= 0) {
@@ -126,6 +129,7 @@ srs_error_t SrsRtpH264Muxer::filter(SrsSharedPtrMessage* shared_frame, SrsFormat
     }
 
     shared_frame->set_samples(format->video->samples, format->video->nb_samples);
+    shared_frame->set_max_samples(nn_max_samples);
 
     return err;
 }

@@ -539,6 +539,7 @@ public:
     virtual int get_rtc_server_padding();
     virtual bool get_rtc_server_perf_stat();
     virtual int get_rtc_server_queue_length();
+    virtual int get_rtc_server_deep_padding();
 
 public:
     SrsConfDirective* get_rtc(std::string vhost);

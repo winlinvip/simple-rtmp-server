@@ -136,6 +136,10 @@ public:
     int nn_rtp_bytes;
     // The total padded bytes.
     int nn_padding_bytes;
+    // The extra packets introduced by deep padding.
+    int nn_deep_padding;
+    // Whether matches the deep padding.
+    bool match_deep_padding;
 public:
     // The RTP packets send out by sendmmsg or sendmsg. Note that if many packets group to
     // one msghdr by GSO, it's only one RTP packet, because we only send once.
@@ -193,6 +197,7 @@ private:
     bool merge_nalus;
     bool gso;
     int max_padding;
+    int deep_padding;
 public:
     SrsRtcSenderThread(SrsRtcSession* s, SrsUdpMuxSocket* u, int parent_cid);
     virtual ~SrsRtcSenderThread();

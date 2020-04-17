@@ -46,6 +46,8 @@ p = obj['data']['dropped']
 print('RTC Frame Dropped: %.4f%s'%(10000.0 * p['rtc_dropeed'] / p['rtc_frames'], '%%'))
 p = obj['data']['bytes']
 print('Padding Overload: %.4f%s %.2fMB'%(10000.0 * p['rtc_padding'] / p['rtc_bytes'], '%%', p['rtc_padding']/1024/1024))
+deep_padding_bytes = p['rtc_deep_padding'] * (20 + 8 + 12) # 20B IP, 8B UDP, 12B RTP header.
+print('Deep Padding Overload: %.4f%s %.2fMB'%(10000.0 * deep_padding_bytes / p['rtc_bytes'], '%%', deep_padding_bytes/1024/1024))
 
 # 2, 3, 5, 9, 16, 32, 64, 128, 256
 keys = ['lt_2', 'lt_3', 'lt_5', 'lt_9', 'lt_16', 'lt_32', 'lt_64', 'lt_128', 'lt_256', 'gt_256']

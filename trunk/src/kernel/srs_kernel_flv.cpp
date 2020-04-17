@@ -215,6 +215,7 @@ SrsSharedPtrMessage::SrsSharedPtrPayload::SrsSharedPtrPayload()
     samples = NULL;
     nn_samples = 0;
     has_idr = false;
+    nn_max_samples = 0;
 
     extra_payloads = NULL;
     nn_extra_payloads = 0;

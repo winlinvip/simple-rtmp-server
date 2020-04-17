@@ -474,6 +474,8 @@ SrsRtcPackets::SrsRtcPackets()
     nn_videos = nn_samples = 0;
     nn_bytes = nn_rtp_bytes = 0;
     nn_padding_bytes = nn_paddings = 0;
+    nn_deep_padding = 0;
+    match_deep_padding = false;
     nn_dropped = 0;
 
     cursor = 0;
@@ -508,6 +510,8 @@ void SrsRtcPackets::reset(bool gso, bool merge_nalus)
     nn_videos = nn_samples = 0;
     nn_bytes = nn_rtp_bytes = 0;
     nn_padding_bytes = nn_paddings = 0;
+    nn_deep_padding = 0;
+    match_deep_padding = false;
     nn_dropped = 0;
 
     cursor = 0;
@@ -557,6 +561,7 @@ SrsRtcSenderThread::SrsRtcSenderThread(SrsRtcSession* s, SrsUdpMuxSocket* u, int
     gso = false;
     merge_nalus = false;
     max_padding = 0;
+    deep_padding = 0;
 
     audio_timestamp = 0;
     audio_sequence = 0;
@@ -587,8 +592,9 @@ srs_error_t SrsRtcSenderThread::initialize(const uint32_t& vssrc, const uint32_t
     gso = _srs_config->get_rtc_server_gso();
     merge_nalus = _srs_config->get_rtc_server_merge_nalus();
     max_padding = _srs_config->get_rtc_server_padding();
-    srs_trace("RTC sender video(ssrc=%d, pt=%d), audio(ssrc=%d, pt=%d), package(gso=%d, merge_nalus=%d), padding=%d",
-        video_ssrc, video_payload_type, audio_ssrc, audio_payload_type, gso, merge_nalus, max_padding);
+    deep_padding = _srs_config->get_rtc_server_deep_padding();
+    srs_trace("RTC sender video(ssrc=%d, pt=%d), audio(ssrc=%d, pt=%d), package(gso=%d, merge_nalus=%d), padding=%d, deep=%d",
+        video_ssrc, video_payload_type, audio_ssrc, audio_payload_type, gso, merge_nalus, max_padding, deep_padding);
 
     return err;
 }
@@ -616,6 +622,14 @@ srs_error_t SrsRtcSenderThread::on_reload_rtc_server()
         if (max_padding != v) {
             srs_trace("Reload padding %d=>%d", max_padding, v);
             max_padding = v;
+        }
+    }
+
+    if (true) {
+        int v = _srs_config->get_rtc_server_deep_padding();
+        if (deep_padding != v) {
+            srs_trace("Reload deep_padding %d=>%d", deep_padding, v);
+            deep_padding = v;
         }
     }
 
@@ -747,7 +761,7 @@ srs_error_t SrsRtcSenderThread::cycle()
             // Stat the RTP packets going into kernel.
             stat->perf_on_gso_packets(pkts.nn_rtp_pkts);
             // Stat the bytes and paddings.
-            stat->perf_on_rtc_bytes(pkts.nn_bytes, pkts.nn_rtp_bytes, pkts.nn_padding_bytes);
+            stat->perf_on_rtc_bytes(pkts.nn_bytes, pkts.nn_rtp_bytes, pkts.nn_padding_bytes, pkts.nn_deep_padding);
             // Stat the messages and dropped count.
             stat->perf_on_dropped(msg_count, nn_rtc_packets, pkts.nn_dropped);
 
@@ -761,9 +775,9 @@ srs_error_t SrsRtcSenderThread::cycle()
         pprint->elapse();
         if (pprint->can_print()) {
             // TODO: FIXME: Print stat like frame/s, packet/s, loss_packets.
-            srs_trace("-> RTC PLAY %d/%d msgs, %d/%d packets, %d audios, %d extras, %d videos, %d samples, %d/%d/%d bytes, %d pad, %d/%d cache",
+            srs_trace("-> RTC PLAY %d/%d msgs, %d/%d packets, %d audios, %d extras, %d videos, %d samples, %d/%d/%d bytes, %d/%d/%d pad, %d/%d cache",
                 msg_count, pkts.nn_dropped, pkts.size(), pkts.nn_rtp_pkts, pkts.nn_audios, pkts.nn_extras, pkts.nn_videos, pkts.nn_samples, pkts.nn_bytes,
-                pkts.nn_rtp_bytes, pkts.nn_padding_bytes, pkts.nn_paddings, pkts.size(), pkts.capacity());
+                pkts.nn_rtp_bytes, pkts.nn_padding_bytes, pkts.nn_paddings, pkts.match_deep_padding, pkts.nn_deep_padding, pkts.size(), pkts.capacity());
         }
     }
 }
@@ -806,6 +820,34 @@ srs_error_t SrsRtcSenderThread::messages_to_packets(
 ) {
     srs_error_t err = srs_success;
 
+    // Learning about messages for deep padding.
+    int nn_videos = 0; int nn_audios = 0;
+    int max_video_size = 0; int max_audio_size = 0;
+    bool match_deep_padding = false;
+    if (deep_padding > 0 && max_padding > 0 && packets.use_gso) {
+        for (int i = 0; i < nb_msgs; i++) {
+            SrsSharedPtrMessage* msg = msgs[i];
+            if (msg->is_audio()) {
+                max_audio_size = srs_max(max_audio_size, msg->nn_max_extra_payloads());
+                nn_audios++;
+            } else {
+                max_video_size = srs_max(max_audio_size, msg->nn_max_samples());
+                nn_videos++;
+            }
+        }
+
+        if (nn_videos == 1 && nn_audios >= 2 // Only process 1Video and 2+Audio.
+            && max_audio_size < max_video_size // Ignore some small video packets.
+            && max_video_size < max_audio_size * deep_padding /* Ignore some large video packets.*/ ) {
+            match_deep_padding = true;
+        }
+#if defined(SRS_DEBUG)
+        srs_trace("#%d, Deep Padding videos=%d, audios=%d, max=%d/%d, deep=%d, match=%d", packets.debug_id,
+            nn_videos, nn_audios, max_video_size, max_audio_size, deep_padding, match_deep_padding);
+#endif
+    }
+
+    // Start transmuxing RTMP to RTP packets.
     for (int i = 0; i < nb_msgs; i++) {
         SrsSharedPtrMessage* msg = msgs[i];
 
@@ -855,6 +897,28 @@ srs_error_t SrsRtcSenderThread::messages_to_packets(
             continue;
         }
 
+        // Dynamic select the payload size, for deep padding.
+        int nn_dynamic_fua_payload = kRtpMaxPayloadSize;
+
+        if (match_deep_padding && max_audio_size > 0) {
+            // For FUA, it has 2bytes header.
+            int fua_audio_size = max_audio_size - 2;
+            int fua_video_size = max_video_size - 1;
+
+            bool has_tail = (fua_video_size % fua_audio_size);
+            int nn_fuas = fua_video_size / fua_audio_size + (has_tail? 1:0);
+            nn_dynamic_fua_payload = fua_video_size / nn_fuas + (has_tail? 1:0);
+
+            int num_of_packet = 1 + fua_video_size / kRtpMaxPayloadSize;
+            packets.nn_deep_padding = nn_fuas - num_of_packet;
+            packets.match_deep_padding = match_deep_padding;
+
+#if defined(SRS_DEBUG)
+            srs_trace("#%d, Dynamic Padding match=%d, video=%d, audio=%d/%d, fuas=%d, payload=%d, deep=%d/%d", packets.debug_id, match_deep_padding,
+                max_video_size, max_audio_size, fua_audio_size, nn_fuas, nn_dynamic_fua_payload, packets.match_deep_padding, packets.nn_deep_padding);
+#endif
+        }
+
         // By default, we package each NALU(sample) to a RTP or FUA packet.
         for (int i = 0; i < nn_samples; i++) {
             SrsSample* sample = msg->samples() + i;
@@ -865,12 +929,12 @@ srs_error_t SrsRtcSenderThread::messages_to_packets(
                 continue;
             }
 
-            if (sample->size <= kRtpMaxPayloadSize) {
+            if (sample->size <= nn_dynamic_fua_payload) {
                 if ((err = packet_single_nalu(msg, sample, packets)) != srs_success) {
                     return srs_error_wrap(err, "packet single nalu");
                 }
             } else {
-                if ((err = packet_fu_a(msg, sample, kRtpMaxPayloadSize, packets)) != srs_success) {
+                if ((err = packet_fu_a(msg, sample, nn_dynamic_fua_payload, packets)) != srs_success) {
                     return srs_error_wrap(err, "packet fu-a");
                 }
             }
@@ -1000,7 +1064,7 @@ srs_error_t SrsRtcSenderThread::send_packets_gso(SrsRtcPackets& packets)
 
                 if (padding > 0) {
 #if defined(SRS_DEBUG)
-                    srs_trace("#%d, Padding %d bytes %d=>%d, packets %d, max_padding %d", packets.debug_id,
+                    srs_trace("#%d, Final Padding %d bytes %d=>%d, packets %d, max_padding %d", packets.debug_id,
                         padding, nn_packet, nn_packet + padding, nn_packets, max_padding);
 #endif
                     packet->add_padding(padding);
@@ -1145,9 +1209,9 @@ srs_error_t SrsRtcSenderThread::send_packets_gso(SrsRtcPackets& packets)
     }
 
 #if defined(SRS_DEBUG)
-    srs_trace("#%d, RTC PLAY summary, rtp %d/%d, videos %d/%d, audios %d/%d, pad %d/%d/%d", packets.debug_id, packets.size(),
+    srs_trace("#%d, RTC PLAY summary, rtp %d/%d, videos %d/%d, audios %d/%d, pad %d/%d/%d, deep %d/%d", packets.debug_id, packets.size(),
         packets.nn_rtp_pkts, packets.nn_videos, packets.nn_samples, packets.nn_audios, packets.nn_extras, packets.nn_paddings,
-        packets.nn_padding_bytes, packets.nn_rtp_bytes);
+        packets.nn_padding_bytes, packets.nn_rtp_bytes, packets.match_deep_padding, packets.nn_deep_padding);
 #endif
 
     return err;

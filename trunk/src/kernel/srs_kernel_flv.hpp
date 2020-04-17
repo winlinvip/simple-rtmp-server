@@ -310,6 +310,9 @@ private:
         int nn_samples;
         // For RTC video, whether NALUs has IDR.
         bool has_idr;
+        // The max size payload in samples.
+        // @remark For GSO to fast guess the best padding.
+        int nn_max_samples;
     public:
         // For RTC audio, we may need to transcode AAC to opus,
         // so there must be an extra payloads, which is transformed from payload.
@@ -377,6 +380,9 @@ public:
     void set_samples(SrsSample* samples, int nn_samples);
     int nn_samples() { return ptr->nn_samples; }
     SrsSample* samples() { return ptr->samples; }
+    // The max sample payload size.
+    void set_max_samples(int v) { ptr->nn_max_samples = v; }
+    int nn_max_samples() { return ptr->nn_max_samples; }
 #endif
 };
 

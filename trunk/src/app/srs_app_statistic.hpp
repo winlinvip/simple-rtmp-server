@@ -262,8 +262,9 @@ public:
     virtual void perf_on_sendmmsg_packets(int nb_packets);
     virtual srs_error_t dumps_perf_sendmmsg(SrsJsonObject* obj);
 public:
-    // Stat for bytes, nn_bytes is the size of bytes, nb_padding is padding bytes.
-    virtual void perf_on_rtc_bytes(int nn_bytes, int nn_rtp_bytes, int nn_padding);
+    // Stat for bytes, nn_bytes is the size of bytes, nn_rtp_bytes is the RTP bytes,
+    // nb_padding is padding bytes, nn_deep_padding is extra RTP packet for deep panding.
+    virtual void perf_on_rtc_bytes(int nn_bytes, int nn_rtp_bytes, int nn_padding, int nn_deep_padding);
     virtual srs_error_t dumps_perf_bytes(SrsJsonObject* obj);
 public:
     // Stat for rtc messages, nn_rtc is rtc messages, nn_dropped is dropped messages.

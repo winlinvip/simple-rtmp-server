@@ -193,16 +193,16 @@
 #undef SRS_PERF_GLIBC_MEMORY_CHECK
 
 // For RTC, how many iovs we alloc for each mmsghdr for GSO.
-// Assume that there are 2400 clients, say, 60000 msgs in queue to send, the memory is:
+// Assume that there are 2400 clients, say, 10000 msgs in queue to send, the memory is:
 //      2                                       # We have two queue, cache and hotspot.
 //      * 4                                     # We have reuseport, each have msg cache queue.
 //      * (64 + SRS_PERF_RTC_GSO_IOVS * 1500)   # Each message size.
-//      * 60000                                 # Total messages.
-//      = 715MB                                 # For SRS_PERF_RTC_GSO_IOVS = 1
-//      = 1402MB                                # For SRS_PERF_RTC_GSO_IOVS = 2
-//      = 2775MB                                # For SRS_PERF_RTC_GSO_IOVS = 4
+//      * 10000                                 # Total messages.
+//      = 920MB                                 # For SRS_PERF_RTC_GSO_IOVS = 8
+//      = 1380MB                                # For SRS_PERF_RTC_GSO_IOVS = 12
+//      = 1840MB                                # For SRS_PERF_RTC_GSO_IOVS = 16
 #if defined(__linux__)
-    #define SRS_PERF_RTC_GSO_IOVS 2
+    #define SRS_PERF_RTC_GSO_IOVS 3
 #else
     #define SRS_PERF_RTC_GSO_IOVS 1
 #endif
