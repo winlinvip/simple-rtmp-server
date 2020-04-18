@@ -220,6 +220,7 @@ public:
 private:
     srs_error_t send_messages(SrsSource* source, SrsSharedPtrMessage** msgs, int nb_msgs, SrsRtcPackets& packets);
     srs_error_t messages_to_packets(SrsSource* source, SrsSharedPtrMessage** msgs, int nb_msgs, SrsRtcPackets& packets);
+    srs_error_t messages_to_packets_gso(SrsSource* source, SrsSharedPtrMessage** msgs, int nb_msgs, SrsRtcPackets& packets);
     srs_error_t send_packets(SrsRtcPackets& packets);
     srs_error_t send_packets_gso(SrsRtcPackets& packets);
 private:
