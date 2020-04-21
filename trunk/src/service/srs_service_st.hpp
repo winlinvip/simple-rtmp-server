@@ -52,6 +52,10 @@ extern srs_error_t srs_fd_reuseaddr(int fd);
 // Set the SO_REUSEPORT of fd.
 extern srs_error_t srs_fd_reuseport(int fd);
 
+// Set the SO_ZEROCOPY of fd.
+// @remark SO_ZEROCOPY is not supported util linux kernel 5.0
+extern srs_error_t srs_fd_zerocopy(int fd);
+
 // Set the SO_KEEPALIVE of fd.
 extern srs_error_t srs_fd_keepalive(int fd);
 

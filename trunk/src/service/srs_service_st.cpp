@@ -38,6 +38,11 @@ using namespace std;
 // nginx also set to 512
 #define SERVER_LISTEN_BACKLOG 512
 
+// @see https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/msg_zerocopy.c
+#ifndef SO_ZEROCOPY
+#define SO_ZEROCOPY	60
+#endif
+
 #ifdef __linux__
 #include <sys/epoll.h>
 
@@ -126,6 +131,16 @@ srs_error_t srs_fd_reuseport(int fd)
     #warning "SO_REUSEPORT is not supported by your OS"
     srs_warn("SO_REUSEPORT is not supported util Linux kernel 3.9");
 #endif
+
+    return srs_success;
+}
+
+srs_error_t srs_fd_zerocopy(int fd)
+{
+    int v = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_ZEROCOPY, &v, sizeof(int)) == -1) {
+        return srs_error_new(ERROR_SOCKET_ZEROCOPY, "SO_ZEROCOPY fd=%d", fd);
+    }
 
     return srs_success;
 }

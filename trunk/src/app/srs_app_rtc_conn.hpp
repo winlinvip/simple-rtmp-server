@@ -198,6 +198,13 @@ private:
     srs_utime_t mw_sleep;
     int mw_msgs;
     bool realtime;
+private:
+    // Whether enable UDP MSG_ZEROCOPY https://www.kernel.org/doc/html/latest/networking/msg_zerocopy.html
+    // @note Requires linux kernel 5 https://lore.kernel.org/netdev/CA+FuTSfBFqRViKfG5crEv8xLMgAkp3cZ+yeuELK5TVv61xT=Yw@mail.gmail.com/
+    bool msg_zerocopy;
+    // Limits the max count of IOVs for ZeroCopy.
+    // @see https://github.com/ossrs/state-threads/issues/13#issuecomment-616890134
+    int gso_limit_iovs;
 public:
     SrsRtcSenderThread(SrsRtcSession* s, SrsUdpMuxSocket* u, int parent_cid);
     virtual ~SrsRtcSenderThread();
@@ -324,6 +331,9 @@ private:
     // The extra queue ratio.
     int extra_ratio;
     int extra_queue;
+    // Whether enable UDP MSG_ZEROCOPY https://www.kernel.org/doc/html/latest/networking/msg_zerocopy.html
+    // @note Requires linux kernel 5 https://lore.kernel.org/netdev/CA+FuTSfBFqRViKfG5crEv8xLMgAkp3cZ+yeuELK5TVv61xT=Yw@mail.gmail.com/
+    bool msg_zerocopy;
 public:
     SrsUdpMuxSender(SrsRtcServer* s);
     virtual ~SrsUdpMuxSender();

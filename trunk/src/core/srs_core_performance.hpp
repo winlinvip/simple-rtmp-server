@@ -210,6 +210,8 @@
 
 // For RTC, the max iovs in msghdr, the max packets sent in a msghdr.
 #define SRS_PERF_RTC_GSO_MAX 64
+// For ZeroCopy, we use smaller iovs, @see https://github.com/ossrs/state-threads/issues/13#issuecomment-616890134
+#define SRS_PERF_RTC_GSO_MAX_ZEROCOPY 12
 
 // For RTC, the max count of RTP packets we process in one loop.
 #define SRS_PERF_RTC_RTP_PACKETS 1024

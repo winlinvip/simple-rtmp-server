@@ -40,6 +40,22 @@ using namespace std;
 #define UDP_SEGMENT             103
 #endif
 
+// @see https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/msg_zerocopy.c
+#ifdef __linux__
+#include <linux/errqueue.h>
+#endif
+#ifndef SO_EE_ORIGIN_ZEROCOPY
+#define SO_EE_ORIGIN_ZEROCOPY		5
+#endif
+
+#ifndef SO_EE_CODE_ZEROCOPY_COPIED
+#define SO_EE_CODE_ZEROCOPY_COPIED	1
+#endif
+
+#ifndef MSG_ZEROCOPY
+#define MSG_ZEROCOPY	0x4000000
+#endif
+
 #include <sstream>
 
 #include <srs_core_autofree.hpp>
@@ -566,6 +582,8 @@ SrsRtcSenderThread::SrsRtcSenderThread(SrsRtcSession* s, SrsUdpMuxSocket* u, int
     mw_sleep = 0;
     mw_msgs = 0;
     realtime = true;
+    msg_zerocopy = false;
+    gso_limit_iovs = SRS_PERF_RTC_GSO_MAX;
 
     _srs_config->subscribe(this);
 }
@@ -591,8 +609,16 @@ srs_error_t SrsRtcSenderThread::initialize(const uint32_t& vssrc, const uint32_t
     gso = _srs_config->get_rtc_server_gso();
     merge_nalus = _srs_config->get_rtc_server_merge_nalus();
     max_padding = _srs_config->get_rtc_server_padding();
-    srs_trace("RTC sender video(ssrc=%d, pt=%d), audio(ssrc=%d, pt=%d), package(gso=%d, merge_nalus=%d), padding=%d",
-        video_ssrc, video_payload_type, audio_ssrc, audio_payload_type, gso, merge_nalus, max_padding);
+    msg_zerocopy = _srs_config->get_rtc_server_zerocopy();
+
+    if (msg_zerocopy) {
+        gso_limit_iovs = SRS_PERF_RTC_GSO_MAX_ZEROCOPY;
+    } else {
+        gso_limit_iovs = SRS_PERF_RTC_GSO_MAX;
+    }
+
+    srs_trace("RTC sender video(ssrc=%d, pt=%d), audio(ssrc=%d, pt=%d), package(gso=%d, merge_nalus=%d), padding=%d, zerocopy=%d, max_iovs=%d",
+        video_ssrc, video_payload_type, audio_ssrc, audio_payload_type, gso, merge_nalus, max_padding, msg_zerocopy, gso_limit_iovs);
 
     return err;
 }
@@ -602,8 +628,16 @@ srs_error_t SrsRtcSenderThread::on_reload_rtc_server()
     gso = _srs_config->get_rtc_server_gso();
     merge_nalus = _srs_config->get_rtc_server_merge_nalus();
     max_padding = _srs_config->get_rtc_server_padding();
+    msg_zerocopy = _srs_config->get_rtc_server_zerocopy();
 
-    srs_trace("Reload rtc_server gso=%d, merge_nalus=%d, max_padding=%d", gso, merge_nalus, max_padding);
+    if (msg_zerocopy) {
+        gso_limit_iovs = SRS_PERF_RTC_GSO_MAX_ZEROCOPY;
+    } else {
+        gso_limit_iovs = SRS_PERF_RTC_GSO_MAX;
+    }
+
+    srs_trace("Reload rtc_server gso=%d, merge_nalus=%d, max_padding=%d, zerocopy=%d, max_iovs=%d",
+        gso, merge_nalus, max_padding, msg_zerocopy, gso_limit_iovs);
 
     return srs_success;
 }
@@ -1108,7 +1142,7 @@ srs_error_t SrsRtcSenderThread::send_packets_gso(SrsRtcPackets& packets)
         }
 
         // If exceed the max GSO size, set to final.
-        if (using_gso && gso_cursor + 1 >= SRS_PERF_RTC_GSO_MAX) {
+        if (using_gso && gso_cursor + 1 >= gso_limit_iovs) {
             gso_final = true;
         }
 
@@ -1886,6 +1920,7 @@ SrsUdpMuxSender::SrsUdpMuxSender(SrsRtcServer* s)
     extra_queue = 0;
     gso = false;
     nn_senders = 0;
+    msg_zerocopy = false;
 
     _srs_config->subscribe(this);
 }
@@ -1920,14 +1955,19 @@ srs_error_t SrsUdpMuxSender::initialize(srs_netfd_t fd, int senders)
     gso = _srs_config->get_rtc_server_gso();
     queue_length = srs_max(128, _srs_config->get_rtc_server_queue_length());
     nn_senders = senders;
+    msg_zerocopy = _srs_config->get_rtc_server_zerocopy();
+
+    if (msg_zerocopy && (err = srs_fd_zerocopy(srs_netfd_fileno(fd))) != srs_success) {
+        return srs_error_wrap(err, "setsockopt");
+    }
 
     // For no GSO, we need larger queue.
     if (!gso) {
         queue_length *= 2;
     }
 
-    srs_trace("RTC sender #%d init ok, max_sendmmsg=%d, gso=%d, queue_max=%dx%d, extra_ratio=%d/%d", srs_netfd_fileno(fd),
-        max_sendmmsg, gso, queue_length, nn_senders, extra_ratio, extra_queue);
+    srs_trace("RTC sender #%d init ok, max_sendmmsg=%d, gso=%d, queue_max=%dx%d, extra_ratio=%d/%d, zerocopy=%d", srs_netfd_fileno(fd),
+        max_sendmmsg, gso, queue_length, nn_senders, extra_ratio, extra_queue, msg_zerocopy);
 
     return err;
 }
@@ -2021,6 +2061,8 @@ srs_error_t SrsUdpMuxSender::cycle()
     uint64_t nn_gso_msgs = 0; uint64_t nn_gso_iovs = 0; int nn_gso_msgs_max = 0; int nn_gso_iovs_max = 0;
     int nn_loop = 0; int nn_wait = 0;
     srs_utime_t time_last = srs_get_system_time();
+    // For MSG_ZEROCOPY, the range in reception from kernel binded to FD.
+    uint64_t nn_zerocopy = 0;
 
     bool stat_enabled = _srs_config->get_rtc_server_perf_stat();
     SrsStatistic* stat = SrsStatistic::instance();
@@ -2050,6 +2092,7 @@ srs_error_t SrsUdpMuxSender::cycle()
 
         int gso_pos = 0;
         int nn_writen = 0;
+        uint32_t nn_zerocopy_flying = 0;
         if (pos > 0) {
             // Send out all messages.
             // @see https://linux.die.net/man/2/sendmmsg
@@ -2059,10 +2102,30 @@ srs_error_t SrsUdpMuxSender::cycle()
                 int vlen = (int)(end - p);
                 vlen = srs_min(max_sendmmsg, vlen);
 
-                int r0 = srs_sendmmsg(lfd, p, (unsigned int)vlen, 0, SRS_UTIME_NO_TIMEOUT);
-                if (r0 != vlen) {
-                    srs_warn("sendmmsg %d msgs, %d done", vlen, r0);
+                int flags = (msg_zerocopy? MSG_ZEROCOPY:0);
+                int r0 = srs_sendmmsg(lfd, p, (unsigned int)vlen, flags, SRS_UTIME_NO_TIMEOUT);
+                if (r0 > 0) {
+                    nn_zerocopy_flying += r0;
                 }
+                if (r0 != vlen) {
+                    srs_warn("sendmmsg %d msgs, %d done, msg[0] len %d", vlen, r0, p->msg_len);
+                }
+
+#ifdef SRS_DEBUG
+                for (int i = 0; i < vlen; i++) {
+                    mmsghdr* p0 = p + i;
+                    msghdr* m0 = &p0->msg_hdr;
+
+                    int nn = 0;
+                    for (int j = 0; j < (int)m0->msg_iovlen; j++) {
+                        iovec* iov = m0->msg_iov + j;
+                        nn += iov->iov_len;
+                    }
+                    srs_trace("SEND by sendmmsg #%d, iovs %d, bytes %d, control %d", i, m0->msg_iovlen, nn, m0->msg_controllen);
+                }
+                srs_trace("SEND by sendmmsg %d msgs, r0 %d, errno %d, msg[0] len %d, flying %d",
+                    vlen, r0, errno, p->msg_len, nn_zerocopy_flying);
+#endif
 
                 if (stat_enabled) {
                     stat->perf_on_sendmmsg_packets(vlen);
@@ -2085,6 +2148,52 @@ srs_error_t SrsUdpMuxSender::cycle()
                 }
             }
         }
+
+#ifdef __linux__
+        // Reception from kernel, @see https://www.kernel.org/doc/html/latest/networking/msg_zerocopy.html#notification-reception
+        // See do_recv_completion at https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/msg_zerocopy.c#L393
+        if (msg_zerocopy) {
+            uint64_t need_confirmed = nn_zerocopy + nn_zerocopy_flying;
+
+            while (nn_zerocopy < need_confirmed) {
+                msghdr msg;
+                memset(&msg, 0, sizeof(msghdr));
+
+                // Reception from kernel, @see https://www.kernel.org/doc/html/latest/networking/msg_zerocopy.html#notification-reception
+                // See do_recv_completion at https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/msg_zerocopy.c#L393
+                char control[100];
+                msg.msg_control = control;
+                msg.msg_controllen = sizeof(control);
+                // Note that the r0 is 0, the reception is in the control.
+                int r0 = srs_recvmsg(lfd, &msg, MSG_ERRQUEUE, SRS_UTIME_NO_TIMEOUT);
+                srs_assert(r0 >= 0);
+                srs_assert(msg.msg_flags == MSG_ERRQUEUE);
+
+                // Notification parsing, @see https://www.kernel.org/doc/html/latest/networking/msg_zerocopy.html#notification-parsing
+                cmsghdr* cm = CMSG_FIRSTHDR(&msg);
+                srs_assert(cm->cmsg_level == SOL_IP || cm->cmsg_type == IP_RECVERR);
+
+                sock_extended_err* serr = (sock_extended_err*)(void*)CMSG_DATA(cm);
+                srs_assert(serr->ee_errno == 0 && serr->ee_origin == SO_EE_ORIGIN_ZEROCOPY);
+
+                uint32_t hi = serr->ee_data;
+                uint32_t lo = serr->ee_info;
+                uint32_t range = hi - lo + 1;
+                nn_zerocopy += range;
+#ifdef SRS_DEBUG
+                srs_trace("Reception %d bytes, flags %#x, cmsg(level %#x, type %#x), serr(errno %#x, origin %#x, code %#x), range %d [%d, %d], flying=%d/%d",
+                    msg.msg_controllen, msg.msg_flags, cm->cmsg_level, cm->cmsg_type, serr->ee_errno, serr->ee_origin, serr->ee_code, range, lo, hi,
+                    (int)(need_confirmed - nn_zerocopy), nn_zerocopy_flying);
+#endif
+
+                // Defered Copies, @see https://www.kernel.org/doc/html/latest/networking/msg_zerocopy.html#deferred-copies
+                if (msg_zerocopy && serr->ee_code == SO_EE_CODE_ZEROCOPY_COPIED) {
+                    srs_warn("Warning: Defered copies, stop zerocopy");
+                    msg_zerocopy = false;
+                }
+            }
+        }
+#endif
 
         if (!stat_enabled) {
             continue;
@@ -2125,9 +2234,10 @@ srs_error_t SrsUdpMuxSender::cycle()
                 nn_cache += hdr->msg_hdr.msg_iovlen;
             }
 
-            srs_trace("-> RTC SEND #%d, sessions %d, udp %d/%d/%" PRId64 ", gso %d/%d/%" PRId64 ", iovs %d/%d/%" PRId64 ", pps %d/%d%s, cache %d/%d, bytes %d/%" PRId64,
+            srs_trace("-> RTC SEND #%d, sessions %d, udp %d/%d/%" PRId64 ", gso %d/%d/%" PRId64 ", iovs %d/%d/%" PRId64 ", pps %d/%d%s, cache %d/%d, bytes %d/%" PRId64 ", zcopy %" PRId64,
                 srs_netfd_fileno(lfd), (int)server->nn_sessions(), pos, nn_msgs_max, nn_msgs, gso_pos, nn_gso_msgs_max, nn_gso_msgs, gso_iovs,
-                nn_gso_iovs_max, nn_gso_iovs, pps_average, pps_last, pps_unit.c_str(), (int)hotspot.size(), nn_cache, nn_bytes_max, nn_bytes);
+                nn_gso_iovs_max, nn_gso_iovs, pps_average, pps_last, pps_unit.c_str(), (int)hotspot.size(), nn_cache, nn_bytes_max, nn_bytes,
+                nn_zerocopy);
             nn_msgs_last = nn_msgs; time_last = srs_get_system_time();
             nn_loop = nn_wait = nn_msgs_max = 0;
             nn_gso_msgs_max = 0; nn_gso_iovs_max = 0;
@@ -2140,13 +2250,18 @@ srs_error_t SrsUdpMuxSender::cycle()
 
 srs_error_t SrsUdpMuxSender::on_reload_rtc_server()
 {
-    if (true) {
-        int v = _srs_config->get_rtc_server_sendmmsg();
-        if (max_sendmmsg != v) {
-            srs_trace("Reload max_sendmmsg %d=>%d", max_sendmmsg, v);
-            max_sendmmsg = v;
-        }
+    max_sendmmsg = _srs_config->get_rtc_server_sendmmsg();
+    gso = _srs_config->get_rtc_server_gso();
+    queue_length = srs_max(128, _srs_config->get_rtc_server_queue_length());
+    msg_zerocopy = _srs_config->get_rtc_server_zerocopy();
+
+    // For no GSO, we need larger queue.
+    if (!gso) {
+        queue_length *= 2;
     }
+
+    srs_trace("Reload max_sendmmsg=%d, gso=%d, queue_length=%d, zerocopy=%d",
+        max_sendmmsg, gso, queue_length, msg_zerocopy);
 
     return srs_success;
 }
