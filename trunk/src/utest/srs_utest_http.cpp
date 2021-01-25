@@ -204,6 +204,136 @@ bool _mock_srs_path_not_exists(std::string /*path*/)
     return false;
 }
 
+extern void srs_iovec_copy(const iovec* src, int& nn_src, iovec* dest, int& nn_dest);
+
+VOID TEST(ProtocolHTTPTest, CopyIovecs)
+{
+    if (true) {
+        int nn_src = 1;
+        iovec* src = new iovec[nn_src];
+        src[0].iov_len = 1; src[0].iov_base = (void*)"H";
+
+        int nn_dest = 1;
+        iovec* dest = new iovec[nn_dest];
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_len = 16;
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_base = new char[dest[i].iov_len];
+
+        srs_iovec_copy(src, nn_src, dest, nn_dest, NULL);
+        EXPECT_EQ(0, nn_src); EXPECT_EQ(1, nn_dest); EXPECT_EQ(1, dest[0].iov_len);
+        EXPECT_EQ((uint8_t)'H', (uint8_t)((char*)dest[0].iov_base)[0]);
+
+        srs_iovec_free(dest, nn_dest);
+    }
+
+    if (true) {
+        int nn_src = 3;
+        iovec* src = new iovec[nn_src];
+        src[0].iov_len = 1; src[0].iov_base = (void*)"H";
+        src[1].iov_len = 1; src[1].iov_base = (void*)"e";
+        src[2].iov_len = 1; src[2].iov_base = (void*)"l";
+
+        int nn_dest = 3;
+        iovec* dest = new iovec[nn_dest];
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_len = 16;
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_base = new char[dest[i].iov_len];
+
+        srs_iovec_copy(src, nn_src, dest, nn_dest, NULL);
+        EXPECT_EQ(0, nn_src); EXPECT_EQ(1, nn_dest); EXPECT_EQ(3, dest[0].iov_len);
+        EXPECT_EQ((uint8_t)'H', (uint8_t)((char*)dest[0].iov_base)[0]);
+        EXPECT_EQ((uint8_t)'e', (uint8_t)((char*)dest[0].iov_base)[1]);
+        EXPECT_EQ((uint8_t)'l', (uint8_t)((char*)dest[0].iov_base)[2]);
+
+        srs_iovec_free(dest, nn_dest);
+    }
+
+    if (true) {
+        int nn_src = 3;
+        iovec* src = new iovec[nn_src];
+        src[0].iov_len = 1; src[0].iov_base = (void*)"H";
+        src[1].iov_len = 1; src[1].iov_base = (void*)"e";
+        src[2].iov_len = 1; src[2].iov_base = (void*)"l";
+
+        int nn_dest = 3;
+        iovec* dest = new iovec[nn_dest];
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_len = 1;
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_base = new char[dest[i].iov_len];
+
+        srs_iovec_copy(src, nn_src, dest, nn_dest, NULL);
+        EXPECT_EQ(0, nn_src); EXPECT_EQ(3, nn_dest);
+        EXPECT_EQ(1, dest[0].iov_len); EXPECT_EQ((uint8_t)'H', (uint8_t)((char*)dest[0].iov_base)[0]);
+        EXPECT_EQ(1, dest[1].iov_len); EXPECT_EQ((uint8_t)'e', (uint8_t)((char*)dest[1].iov_base)[0]);
+        EXPECT_EQ(1, dest[2].iov_len); EXPECT_EQ((uint8_t)'l', (uint8_t)((char*)dest[2].iov_base)[0]);
+
+        srs_iovec_free(dest, nn_dest);
+    }
+
+    if (true) {
+        int nn_src = 3;
+        iovec* src = new iovec[nn_src];
+        src[0].iov_len = 5; src[0].iov_base = (void*)"Hello";
+        src[1].iov_len = 3; src[1].iov_base = (void*)"SRS";
+        src[2].iov_len = 5; src[2].iov_base = (void*)"World";
+
+        int nn_dest = 3;
+        iovec* dest = new iovec[nn_dest];
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_len = 6;
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_base = new char[dest[i].iov_len];
+
+        srs_iovec_copy(src, nn_src, dest, nn_dest, NULL);
+        EXPECT_EQ(0, nn_src); EXPECT_EQ(3, nn_dest);
+        EXPECT_EQ(6, dest[0].iov_len); EXPECT_EQ((uint8_t)'H', (uint8_t)((char*)dest[0].iov_base)[0]);
+        EXPECT_EQ(6, dest[1].iov_len); EXPECT_EQ((uint8_t)'R', (uint8_t)((char*)dest[1].iov_base)[0]);
+        EXPECT_EQ(1, dest[2].iov_len); EXPECT_EQ((uint8_t)'d', (uint8_t)((char*)dest[2].iov_base)[0]);
+
+        srs_iovec_free(dest, nn_dest);
+    }
+
+    if (true) {
+        int nn_src = 4;
+        iovec* src = new iovec[nn_src];
+        src[0].iov_len = 1; src[0].iov_base = (void*)"H";
+        src[1].iov_len = 0;
+        src[2].iov_len = 1; src[2].iov_base = (void*)"e";
+        src[3].iov_len = 1; src[3].iov_base = (void*)"l";
+
+        int nn_dest = 3;
+        iovec* dest = new iovec[nn_dest];
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_len = 1;
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_base = new char[dest[i].iov_len];
+
+        srs_iovec_copy(src, nn_src, dest, nn_dest, NULL);
+        EXPECT_EQ(0, nn_src); EXPECT_EQ(3, nn_dest);
+        EXPECT_EQ(1, dest[0].iov_len); EXPECT_EQ((uint8_t)'H', (uint8_t)((char*)dest[0].iov_base)[0]);
+        EXPECT_EQ(1, dest[1].iov_len); EXPECT_EQ((uint8_t)'e', (uint8_t)((char*)dest[1].iov_base)[0]);
+        EXPECT_EQ(1, dest[2].iov_len); EXPECT_EQ((uint8_t)'l', (uint8_t)((char*)dest[2].iov_base)[0]);
+
+        srs_iovec_free(dest, nn_dest);
+    }
+
+    if (true) {
+        int nn_src = 3;
+        iovec* src = new iovec[nn_src];
+        src[0].iov_len = 1; src[0].iov_base = (void*)"H";
+        src[1].iov_len = 1; src[1].iov_base = (void*)"e";
+        src[2].iov_len = 1; src[2].iov_base = (void*)"l";
+
+        int nn_dest = 4;
+        iovec* dest = new iovec[nn_dest];
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_len = 1;
+        dest[1].iov_len = 0;
+        for (int i = 0; i < nn_dest; i++) dest[i].iov_base = new char[dest[i].iov_len];
+
+        srs_iovec_copy(src, nn_src, dest, nn_dest, NULL);
+        EXPECT_EQ(0, nn_src); EXPECT_EQ(4, nn_dest);
+        EXPECT_EQ(1, dest[0].iov_len); EXPECT_EQ((uint8_t)'H', (uint8_t)((char*)dest[0].iov_base)[0]);
+        EXPECT_EQ(0, dest[1].iov_len);
+        EXPECT_EQ(1, dest[2].iov_len); EXPECT_EQ((uint8_t)'e', (uint8_t)((char*)dest[2].iov_base)[0]);
+        EXPECT_EQ(1, dest[3].iov_len); EXPECT_EQ((uint8_t)'l', (uint8_t)((char*)dest[3].iov_base)[0]);
+
+        srs_iovec_free(dest, nn_dest);
+    }
+}
+
 VOID TEST(ProtocolHTTPTest, StatusCode2Text)
 {
     EXPECT_STREQ(SRS_CONSTS_HTTP_OK_str, srs_generate_http_status_text(SRS_CONSTS_HTTP_OK).c_str());

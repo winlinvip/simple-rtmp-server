@@ -175,6 +175,12 @@ private:
     SSL* ssl;
     BIO* bio_in;
     BIO* bio_out;
+private:
+    // TODO: FIXME: Avoid memory copying?
+    iovec* cache_plaintext;
+    int nb_cache_plaintext;
+    iovec* cache_cipher;
+    int nb_cache_cipher;
 public:
     SrsSslConnection(ISrsProtocolReadWriter* c);
     virtual ~SrsSslConnection();
@@ -193,5 +199,10 @@ public:
     virtual srs_error_t write(void* buf, size_t size, ssize_t* nwrite);
     virtual srs_error_t writev(const iovec *iov, int iov_size, ssize_t* nwrite);
 };
+
+// Copy the iovec and the callback to initialize the iovec.
+typedef iovec* (*srs_iovec_callback_t) (iovec* p);
+extern void srs_iovec_copy(const iovec* src, int& nn_src, iovec* dest, int& nn_dest, srs_iovec_callback_t callback);
+extern void srs_iovec_free(const iovec* iovs, int nn);
 
 #endif
