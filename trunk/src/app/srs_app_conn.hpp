@@ -175,6 +175,9 @@ private:
     SSL* ssl;
     BIO* bio_in;
     BIO* bio_out;
+private:
+    iovec* cache;
+    int nn_cache;
 public:
     SrsSslConnection(ISrsProtocolReadWriter* c);
     virtual ~SrsSslConnection();

@@ -516,6 +516,14 @@ SrsSslConnection::SrsSslConnection(ISrsProtocolReadWriter* c)
     transport = c;
     ssl_ctx = NULL;
     ssl = NULL;
+
+    nn_cache = 1024;
+    cache = new iovec[nn_cache];
+    for (int i = 0; i < nn_cache; i++) {
+        iovec* p = cache + i;
+        p->iov_len = 0;
+        p->iov_base = NULL;
+    }
 }
 
 SrsSslConnection::~SrsSslConnection()
@@ -529,6 +537,12 @@ SrsSslConnection::~SrsSslConnection()
     if (ssl_ctx) {
         SSL_CTX_free(ssl_ctx);
         ssl_ctx = NULL;
+    }
+
+    for (int i = 0; i < nn_cache; i++) {
+        iovec* p = cache + i;
+        char* pa = (char*)p->iov_base;
+        srs_freepa(pa);
     }
 }
 
@@ -786,15 +800,104 @@ srs_error_t SrsSslConnection::write(void* plaintext, size_t nn_plaintext, ssize_
     return err;
 }
 
+struct SrsIovec
+{
+    iovec* iov;
+    int nn;
+    int pad;
+
+    SrsIovec() {
+    }
+
+    int safe() {
+        return nn - iov->iov_len - pad;
+    }
+
+    int nn_iovecs(iovec* head) {
+        if (head->iov_len <= 0) {
+            return 0;
+        }
+        return iov - head + 1;
+    }
+};
+
+SrsIovec srs_iovec_init(iovec* p, iovec* iovecs, int nn_iovecs)
+{
+    if (p - iovecs >= nn_iovecs) {
+        p = iovecs;
+    }
+
+    SrsIovec w;
+    w.iov = p;
+    w.nn = 1 * 1024;
+    w.pad = 64;
+    p->iov_len = 0;
+
+    if (!p->iov_base) {
+        p->iov_base = new char[w.nn];
+    }
+
+    return w;
+}
+
 srs_error_t SrsSslConnection::writev(const iovec *iov, int iov_size, ssize_t* nwrite)
 {
     srs_error_t err = srs_success;
 
+    SrsIovec cipher = srs_iovec_init(cache, cache, nn_cache);
+
     for (int i = 0; i < iov_size; i++) {
-        const iovec* p = iov + i;
-        if ((err = write((void*)p->iov_base, (size_t)p->iov_len, nwrite)) != srs_success) {
-            return srs_error_wrap(err, "write iov #%d base=%p, size=%d", i, p->iov_base, p->iov_len);
+        const iovec* src = iov + i;
+
+        char* plaintext = (char*)src->iov_base;
+        size_t nn_plaintext = (size_t)src->iov_len;
+        for (char* p = plaintext; p < plaintext + nn_plaintext;) {
+            int left = (int)nn_plaintext - (p - plaintext);
+            left = srs_min(left, cipher.safe());
+
+            int r0 = SSL_write(ssl, (const void*)p, left);
+            int r1 = SSL_get_error(ssl, r0);
+            if (r0 <= 0) {
+                return srs_error_new(ERROR_HTTPS_WRITE, "https: write data=%p, size=%d, r0=%d, r1=%d", p, left, r0, r1);
+            }
+
+            // Move p to the next writing position.
+            p += r0;
+            if (nwrite) {
+                *nwrite += (ssize_t)r0;
+            }
+
+            // Copy the cipher data to iovec.
+            uint8_t* data = NULL;
+            int size = BIO_get_mem_data(bio_out, &data);
+
+            if (size <= 0 || size >= cipher.nn) {
+                return srs_error_new(ERROR_HTTPS_WRITE, "iovec write size=%d left=%d", size, cipher.nn);
+            }
+            memcpy(cipher.iov->iov_base, data, size);
+            cipher.iov->iov_len += size;
+
+            if ((r0 = BIO_reset(bio_out)) != 1) {
+                return srs_error_new(ERROR_HTTPS_WRITE, "BIO_reset r0=%d", r0);
+            }
+
+            // Send out if iovecs exhaust.
+            int nn_iovecs = cipher.nn_iovecs(cache);
+            if (nn_iovecs >= nn_cache) {
+                if ((err = transport->writev(cache, nn_iovecs, NULL)) != srs_success) {
+                    return srs_error_wrap(err, "https: writev nn=%d", nn_iovecs);
+                }
+                cipher = srs_iovec_init(cache, cache, nn_cache);
+            } else {
+                cipher = srs_iovec_init(cipher.iov + 1, cache, nn_cache);
+            }
         }
+    }
+
+    // Send out left iovecs.
+    int nn_iovecs = cipher.nn_iovecs(cache);
+    if (nn_iovecs && (err = transport->writev(cache, nn_iovecs, NULL)) != srs_success) {
+        return srs_error_wrap(err, "https: writev nn=%d", nn_iovecs);
     }
 
     return err;
