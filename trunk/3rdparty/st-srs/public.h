@@ -153,13 +153,16 @@ extern int st_sendto(st_netfd_t fd, const void *msg, int len, const struct socka
 extern int st_recvmsg(st_netfd_t fd, struct msghdr *msg, int flags, st_utime_t timeout);
 extern int st_sendmsg(st_netfd_t fd, const struct msghdr *msg, int flags, st_utime_t timeout);
 
+// The sendmmsg() system call was added in Linux 3.0.  Support in glibc was added in version 2.14.
 // @see http://man7.org/linux/man-pages/man2/sendmmsg.2.html
+#if defined(__linux__) && __GLIBC__>=2 && __GLIBC_MINOR__>=14
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+#define _GNU_SOURCE
 #include <sys/socket.h>
-struct st_mmsghdr {
-   struct msghdr msg_hdr;  /* Message header */
-   unsigned int  msg_len;  /* Number of bytes transmitted */
-};
-extern int st_sendmmsg(st_netfd_t fd, struct st_mmsghdr *msgvec, unsigned int vlen, int flags, st_utime_t timeout);
+extern int st_sendmmsg(st_netfd_t fd, struct mmsghdr *msgvec, unsigned int vlen, int flags, st_utime_t timeout);
+#endif
+#endif
 
 extern st_netfd_t st_open(const char *path, int oflags, mode_t mode);
 
