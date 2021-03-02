@@ -16,6 +16,7 @@ help=no
 ################################################################
 # feature options
 SRS_HDS=NO
+SRS_LAS=NO
 SRS_SRT=NO
 SRS_RTC=RESERVED
 SRS_GB28181=NO
@@ -129,6 +130,7 @@ Features:
 
   --https=on|off            Whether enable HTTPS client and server. Default: $(value2switch $SRS_HTTPS)
   --hds=on|off              Whether build the hds streaming, mux RTMP to F4M/F4V files. Default: $(value2switch $SRS_HDS)
+  --las=on|off              Whether use LAS for http-flv adaptive stream. Default: $(value2switch $SRS_LAS)
   --cherrypy=on|off         Whether install CherryPy for demo api-server. Default: $(value2switch $SRS_CHERRYPY)
   --utest=on|off            Whether build the utest. Default: $(value2switch $SRS_UTEST)
   --srt=on|off              Whether build the SRT. Default: $(value2switch $SRS_SRT)
@@ -227,6 +229,10 @@ function parse_user_option() {
         --with-hds)                     SRS_HDS=YES                 ;;
         --without-hds)                  SRS_HDS=NO                  ;;
         --hds)                          if [[ $value == off ]]; then SRS_HDS=NO; else SRS_HDS=YES; fi    ;;
+
+        --with-las)                     SRS_LAS=YES                 ;;
+        --without-las)                  SRS_LAS=NO                  ;;
+        --las)                          if [[ $value == off ]]; then SRS_LAS=NO; else SRS_LAS=YES; fi    ;;
 
         --with-transcode)               SRS_TRANSCODE=YES           ;;
         --without-transcode)            echo "ignore option \"$option\"" ;;
@@ -514,6 +520,7 @@ function regenerate_options() {
     SRS_AUTO_CONFIGURE="--prefix=${SRS_PREFIX}"
     SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --hls=$(value2switch $SRS_HLS)"
     SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --hds=$(value2switch $SRS_HDS)"
+    SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --las=$(value2switch $SRS_LAS)"
     SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --dvr=$(value2switch $SRS_DVR)"
     SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --ssl=$(value2switch $SRS_SSL)"
     SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --https=$(value2switch $SRS_HTTPS)"
@@ -611,6 +618,7 @@ function check_option_conflicts() {
 
     # check variable neccessary
     if [ $SRS_HDS = RESERVED ]; then echo "you must specifies the hds, see: ./configure --help"; __check_ok=NO; fi
+    if [ $SRS_LAS = RESERVED ]; then echo "you must specifies the las, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_SSL = RESERVED ]; then echo "you must specifies the ssl, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_STREAM_CASTER = RESERVED ]; then echo "you must specifies the stream-caster, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_UTEST = RESERVED ]; then echo "you must specifies the utest, see: ./configure --help"; __check_ok=NO; fi
