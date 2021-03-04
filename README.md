@@ -40,6 +40,8 @@ ffmpeg -re -i doc/source.200kbps.768x320.flv -c copy \
     -f flv rtmp://127.0.0.1/live/livestream
 ```
 
+> Note: If WebRTC enabled, you can publish by [H5](http://localhost:8080/players/rtc_publisher.html?autostart=true).
+
 Play the following streams by players:
 
 * VLC: rtmp://127.0.0.1/live/livestream
