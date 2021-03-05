@@ -19,7 +19,7 @@ Recommend to run SRS by [docker][docker-srs4]:
 docker run --rm -p 1935:1935 -p 1985:1985 -p 8080:8080 \
     ossrs/srs:v4.0.76
 
-# Or, for developers in China.
+# Or, for developers in China to speedup.
 docker run --rm -p 1935:1935 -p 1985:1985 -p 8080:8080 \
     registry.cn-hangzhou.aliyuncs.com/ossrs/srs:v4.0.76
 
@@ -53,9 +53,9 @@ docker run --rm --network=host registry.cn-hangzhou.aliyuncs.com/ossrs/srs:encod
 
 Play the following streams by players:
 
-* VLC: rtmp://localhost/live/livestream
-* H5: [http://localhost:8080/live/livestream.flv](http://localhost:8080/players/srs_player.html?autostart=true&stream=livestream.flv&port=8080&schema=http)
-* H5: [http://localhost:8080/live/livestream.m3u8](http://localhost:8080/players/srs_player.html?autostart=true&stream=livestream.m3u8&port=8080&schema=http)
+* VLC(RTMP): rtmp://localhost/live/livestream
+* H5(HTTP-FLV): [http://localhost:8080/live/livestream.flv](http://localhost:8080/players/srs_player.html?autostart=true&stream=livestream.flv&port=8080&schema=http)
+* H5(HLS): [http://localhost:8080/live/livestream.m3u8](http://localhost:8080/players/srs_player.html?autostart=true&stream=livestream.m3u8&port=8080&schema=http)
 * H5(WebRTC): [webrtc://localhost/live/livestream](http://localhost:8080/players/rtc_player.html?autostart=true)
 
 > The online demos and players are available on [ossrs.net](https://ossrs.net).
