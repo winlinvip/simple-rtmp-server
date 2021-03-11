@@ -54,6 +54,7 @@ using namespace std;
 #include <srs_core_autofree.hpp>
 #include <srs_kernel_file.hpp>
 #include <srs_app_hybrid.hpp>
+#include <srs_app_threads.hpp>
 #ifdef SRS_RTC
 #include <srs_app_rtc_conn.hpp>
 #include <srs_app_rtc_server.hpp>
@@ -65,7 +66,7 @@ using namespace std;
 
 // pre-declare
 srs_error_t run_directly_or_daemon();
-srs_error_t run_hybrid_server();
+srs_error_t run_in_thread_pool();
 void show_macro_features();
 
 // @global log and context.
@@ -415,7 +416,7 @@ srs_error_t run_directly_or_daemon()
     
     // If not daemon, directly run hybrid server.
     if (!run_as_daemon) {
-        if ((err = run_hybrid_server()) != srs_success) {
+        if ((err = run_in_thread_pool()) != srs_success) {
             return srs_error_wrap(err, "run hybrid");
         }
         return srs_success;
@@ -452,14 +453,30 @@ srs_error_t run_directly_or_daemon()
     // son
     srs_trace("son(daemon) process running.");
     
-    if ((err = run_hybrid_server()) != srs_success) {
+    if ((err = run_in_thread_pool()) != srs_success) {
         return srs_error_wrap(err, "daemon run hybrid");
     }
     
     return err;
 }
 
-srs_error_t run_hybrid_server()
+srs_error_t run_hybrid_server(void* arg);
+srs_error_t run_in_thread_pool()
+{
+    srs_error_t err = srs_success;
+
+    if ((err = _srs_thread_pool->initialize()) != srs_success) {
+        return srs_error_wrap(err, "init thread pool");
+    }
+
+    if ((err = _srs_thread_pool->execute(run_hybrid_server, NULL)) != srs_success) {
+        return srs_error_wrap(err, "run hybrid server");
+    }
+
+    return _srs_thread_pool->run();
+}
+
+srs_error_t run_hybrid_server(void* arg)
 {
     srs_error_t err = srs_success;
 
