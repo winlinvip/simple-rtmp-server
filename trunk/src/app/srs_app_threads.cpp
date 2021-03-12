@@ -380,7 +380,7 @@ std::string SrsAsyncLogManager::desc()
     }
 
     static char buf[128];
-    snprintf(buf, sizeof(buf), ", files=%d, queue=%d, max=%d", (int)writers_.size(), nn_logs, max_logs);
+    snprintf(buf, sizeof(buf), ", files=%d, queue=%d/%d", (int)writers_.size(), nn_logs, max_logs);
     return buf;
 }
 
