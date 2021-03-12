@@ -469,7 +469,7 @@ srs_error_t run_in_thread_pool()
         return srs_error_wrap(err, "init thread pool");
     }
 
-    if ((err = _srs_thread_pool->execute(run_hybrid_server, NULL)) != srs_success) {
+    if ((err = _srs_thread_pool->execute("hybrid", run_hybrid_server, NULL)) != srs_success) {
         return srs_error_wrap(err, "run hybrid server");
     }
 

@@ -26,22 +26,85 @@
 
 #include <srs_core.hpp>
 
+#include <pthread.h>
+
+#include <vector>
+#include <string>
+
+class SrsThreadPool;
+
+// The thread mutex wrapper, without error.
+class SrsThreadMutex
+{
+private:
+    pthread_mutex_t lock_;
+public:
+    SrsThreadMutex();
+    virtual ~SrsThreadMutex();
+public:
+    void lock();
+    void unlock();
+};
+
+// The thread mutex locker.
+#define SrsThreadLocker(instance) \
+    impl__SrsThreadLocker _SRS_free_##instance(instance)
+
+class impl__SrsThreadLocker
+{
+private:
+    SrsThreadMutex* lock;
+public:
+    impl__SrsThreadLocker(SrsThreadMutex* l) {
+        lock = l;
+        lock->lock();
+    }
+    virtual ~impl__SrsThreadLocker() {
+        lock->unlock();
+    }
+};
+
+// The information for a thread.
+class SrsThreadEntry
+{
+public:
+    SrsThreadPool* pool;
+    std::string label;
+    srs_error_t (*start)(void* arg);
+    void* arg;
+    int num;
+public:
+    // The thread object.
+    pthread_t trd;
+    // The exit error of thread.
+    srs_error_t err;
+
+    SrsThreadEntry();
+};
+
 // Allocate a(or almost) fixed thread poll to execute tasks,
 // so that we can take the advantage of multiple CPUs.
 class SrsThreadPool
 {
+private:
+    SrsThreadEntry* entry_;
+private:
+    SrsThreadMutex* lock_;
+    std::vector<SrsThreadEntry*> threads_;
 public:
     SrsThreadPool();
     virtual ~SrsThreadPool();
 public:
     // Initialize the thread pool.
     srs_error_t initialize();
-    // Execute start function in thread.
-    srs_error_t execute(srs_error_t (*start)(void* arg), void* arg);
+    // Execute start function with label in thread.
+    srs_error_t execute(std::string label, srs_error_t (*start)(void* arg), void* arg);
     // Run in the primordial thread, util stop or quit.
     srs_error_t run();
     // Stop the thread pool and quit the primordial thread.
     void stop();
+private:
+    static void* start(void* arg);
 };
 
 // The global thread pool.
