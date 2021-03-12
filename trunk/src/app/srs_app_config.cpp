@@ -1492,38 +1492,10 @@ srs_error_t SrsConfig::reload_conf(SrsConfig* conf)
         }
     }
     
-    // merge config: srs_log_tank
-    if (!srs_directive_equals(root->get("srs_log_tank"), old_root->get("srs_log_tank"))) {
-        if ((err = do_reload_srs_log_tank()) != srs_success) {
-            return srs_error_wrap(err, "log tank");;
-        }
-    }
-    
-    // merge config: srs_log_level
-    if (!srs_directive_equals(root->get("srs_log_level"), old_root->get("srs_log_level"))) {
-        if ((err = do_reload_srs_log_level()) != srs_success) {
-            return srs_error_wrap(err, "log level");;
-        }
-    }
-    
-    // merge config: srs_log_file
-    if (!srs_directive_equals(root->get("srs_log_file"), old_root->get("srs_log_file"))) {
-        if ((err = do_reload_srs_log_file()) != srs_success) {
-            return srs_error_wrap(err, "log file");;
-        }
-    }
-    
     // merge config: max_connections
     if (!srs_directive_equals(root->get("max_connections"), old_root->get("max_connections"))) {
         if ((err = do_reload_max_connections()) != srs_success) {
             return srs_error_wrap(err, "max connections");;
-        }
-    }
-    
-    // merge config: utc_time
-    if (!srs_directive_equals(root->get("utc_time"), old_root->get("utc_time"))) {
-        if ((err = do_reload_utc_time()) != srs_success) {
-            return srs_error_wrap(err, "utc time");;
         }
     }
     
@@ -2946,78 +2918,6 @@ srs_error_t SrsConfig::raw_set_ff_log_dir(string ff_log_dir, bool& applied)
     return err;
 }
 
-srs_error_t SrsConfig::raw_set_srs_log_tank(string srs_log_tank, bool& applied)
-{
-    srs_error_t err = srs_success;
-    
-    applied = false;
-    
-    SrsConfDirective* conf = root->get_or_create("srs_log_tank");
-    
-    if (conf->arg0() == srs_log_tank) {
-        return err;
-    }
-    
-    conf->args.clear();
-    conf->args.push_back(srs_log_tank);
-    
-    if ((err = do_reload_srs_log_tank()) != srs_success) {
-        return srs_error_wrap(err, "reload log tank");
-    }
-    
-    applied = true;
-    
-    return err;
-}
-
-srs_error_t SrsConfig::raw_set_srs_log_level(string srs_log_level, bool& applied)
-{
-    srs_error_t err = srs_success;
-    
-    applied = false;
-    
-    SrsConfDirective* conf = root->get_or_create("srs_log_level");
-    
-    if (conf->arg0() == srs_log_level) {
-        return err;
-    }
-    
-    conf->args.clear();
-    conf->args.push_back(srs_log_level);
-    
-    if ((err = do_reload_srs_log_level()) != srs_success) {
-        return srs_error_wrap(err, "reload log level");
-    }
-    
-    applied = true;
-    
-    return err;
-}
-
-srs_error_t SrsConfig::raw_set_srs_log_file(string srs_log_file, bool& applied)
-{
-    srs_error_t err = srs_success;
-    
-    applied = false;
-    
-    SrsConfDirective* conf = root->get_or_create("srs_log_file");
-    
-    if (conf->arg0() == srs_log_file) {
-        return err;
-    }
-    
-    conf->args.clear();
-    conf->args.push_back(srs_log_file);
-    
-    if ((err = do_reload_srs_log_file()) != srs_success) {
-        return srs_error_wrap(err, "reload log file");
-    }
-    
-    applied = true;
-    
-    return err;
-}
-
 srs_error_t SrsConfig::raw_set_max_connections(string max_connections, bool& applied)
 {
     srs_error_t err = srs_success;
@@ -3035,30 +2935,6 @@ srs_error_t SrsConfig::raw_set_max_connections(string max_connections, bool& app
     
     if ((err = do_reload_max_connections()) != srs_success) {
         return srs_error_wrap(err, "reload max connection");
-    }
-    
-    applied = true;
-    
-    return err;
-}
-
-srs_error_t SrsConfig::raw_set_utc_time(string utc_time, bool& applied)
-{
-    srs_error_t err = srs_success;
-    
-    applied = false;
-    
-    SrsConfDirective* conf = root->get_or_create("utc_time");
-    
-    if (conf->arg0() == utc_time) {
-        return err;
-    }
-    
-    conf->args.clear();
-    conf->args.push_back(utc_time);
-    
-    if ((err = do_reload_utc_time()) != srs_success) {
-        return srs_error_wrap(err, "reload");
     }
     
     applied = true;
@@ -3265,54 +3141,6 @@ srs_error_t SrsConfig::do_reload_pid()
     return err;
 }
 
-srs_error_t SrsConfig::do_reload_srs_log_tank()
-{
-    srs_error_t err = srs_success;
-    
-    vector<ISrsReloadHandler*>::iterator it;
-    for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-        ISrsReloadHandler* subscribe = *it;
-        if ((err = subscribe->on_reload_log_tank()) != srs_success) {
-            return srs_error_wrap(err, "notify subscribes reload srs_log_tank failed");
-        }
-    }
-    srs_trace("reload srs_log_tank success.");
-    
-    return err;
-}
-
-srs_error_t SrsConfig::do_reload_srs_log_level()
-{
-    srs_error_t err = srs_success;
-    
-    vector<ISrsReloadHandler*>::iterator it;
-    for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-        ISrsReloadHandler* subscribe = *it;
-        if ((err = subscribe->on_reload_log_level()) != srs_success) {
-            return srs_error_wrap(err, "notify subscribes reload srs_log_level failed");
-        }
-    }
-    srs_trace("reload srs_log_level success.");
-    
-    return err;
-}
-
-srs_error_t SrsConfig::do_reload_srs_log_file()
-{
-    srs_error_t err = srs_success;
-    
-    vector<ISrsReloadHandler*>::iterator it;
-    for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-        ISrsReloadHandler* subscribe = *it;
-        if ((err = subscribe->on_reload_log_file()) != srs_success) {
-            return srs_error_wrap(err, "notify subscribes reload srs_log_file failed");
-        }
-    }
-    srs_trace("reload srs_log_file success.");
-    
-    return err;
-}
-
 srs_error_t SrsConfig::do_reload_max_connections()
 {
     srs_error_t err = srs_success;
@@ -3325,22 +3153,6 @@ srs_error_t SrsConfig::do_reload_max_connections()
         }
     }
     srs_trace("reload max_connections success.");
-    
-    return err;
-}
-
-srs_error_t SrsConfig::do_reload_utc_time()
-{
-    srs_error_t err = srs_success;
-    
-    vector<ISrsReloadHandler*>::iterator it;
-    for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-        ISrsReloadHandler* subscribe = *it;
-        if ((err = subscribe->on_reload_utc_time()) != srs_success) {
-            return srs_error_wrap(err, "utc_time");
-        }
-    }
-    srs_trace("reload utc_time success.");
     
     return err;
 }
@@ -3581,7 +3393,7 @@ srs_error_t SrsConfig::check_normal_config()
             && n != "ff_log_level" && n != "grace_final_wait" && n != "force_grace_quit"
             && n != "grace_start_wait" && n != "empty_ip_ok" && n != "disable_daemon_for_docker"
             && n != "inotify_auto_reload" && n != "auto_reload_for_docker" && n != "tcmalloc_release_rate"
-            ) {
+            && n != "srs_log_flush_interval" && n != "threads") {
             return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal directive %s", n.c_str());
         }
     }
@@ -4291,6 +4103,28 @@ double SrsConfig::tcmalloc_release_rate()
     trr = srs_min(10, trr);
     trr = srs_max(0, trr);
     return trr;
+}
+
+srs_utime_t SrsConfig::get_threads_interval()
+{
+    static srs_utime_t DEFAULT = 60 * SRS_UTIME_SECONDS;
+
+    SrsConfDirective* conf = root->get("threads");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("interval");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    int v = ::atoi(conf->arg0().c_str());
+    if (v <= 0) {
+        return DEFAULT;
+    }
+
+    return v * SRS_UTIME_SECONDS;
 }
 
 vector<SrsConfDirective*> SrsConfig::get_stream_casters()
@@ -6987,6 +6821,23 @@ string SrsConfig::get_log_file()
     }
     
     return conf->arg0();
+}
+
+srs_utime_t SrsConfig::srs_log_flush_interval()
+{
+    srs_utime_t DEFAULT = 1300 * SRS_UTIME_MILLISECONDS;
+
+    SrsConfDirective* conf = root->get("srs_log_flush_interval");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    srs_utime_t v = ::atoi(conf->arg0().c_str()) * SRS_UTIME_MILLISECONDS;
+    if (v <= 0) {
+        return DEFAULT;
+    }
+
+    return v;
 }
 
 bool SrsConfig::get_ff_log_enabled()

@@ -26,6 +26,9 @@
 
 #include <srs_core.hpp>
 
+#include <srs_kernel_file.hpp>
+#include <srs_kernel_flv.hpp>
+
 #include <pthread.h>
 
 #include <vector>
@@ -90,6 +93,7 @@ class SrsThreadPool
 {
 private:
     SrsThreadEntry* entry_;
+    srs_utime_t interval_;
 private:
     SrsThreadMutex* lock_;
     std::vector<SrsThreadEntry*> threads_;
@@ -111,5 +115,66 @@ private:
 
 // The global thread pool.
 extern SrsThreadPool* _srs_thread_pool;
+
+// Async file writer.
+class SrsAsyncFileWriter : public ISrsWriter
+{
+    friend class SrsAsyncLogManager;
+private:
+    std::string filename_;
+    SrsFileWriter* writer_;
+    std::vector<SrsSharedPtrMessage*> dirty_;
+    SrsThreadMutex* lock_;
+private:
+    SrsAsyncFileWriter(std::string p);
+    virtual ~SrsAsyncFileWriter();
+public:
+    // Open file writer, in truncate mode.
+    virtual srs_error_t open();
+    // Open file writer, in append mode.
+    virtual srs_error_t open_append();
+    // Close current writer.
+    virtual void close();
+// Interface ISrsWriteSeeker
+public:
+    virtual srs_error_t write(void* buf, size_t count, ssize_t* pnwrite);
+    virtual srs_error_t writev(const iovec* iov, int iovcnt, ssize_t* pnwrite);
+public:
+    // Flush by other thread.
+    srs_error_t flush();
+};
+
+// The async log file writer manager, use a thread to flush multiple writers,
+// and reopen all log files when got LOGROTATE signal.
+class SrsAsyncLogManager
+{
+private:
+    // The async flush interval.
+    srs_utime_t interval_;
+private:
+    // The async reopen event.
+    bool reopen_;
+private:
+    SrsThreadMutex* lock_;
+    std::vector<SrsAsyncFileWriter*> writers_;
+public:
+    SrsAsyncLogManager();
+    virtual ~SrsAsyncLogManager();
+public:
+    // Initialize the async log manager.
+    srs_error_t initialize();
+    // Create a managed writer, user should never free it.
+    srs_error_t create_writer(std::string filename, SrsAsyncFileWriter** ppwriter);
+    // Reopen all log files, asynchronously.
+    virtual void reopen();
+public:
+    std::string desc();
+private:
+    static srs_error_t start(void* arg);
+    srs_error_t do_start();
+};
+
+// The global async log manager.
+extern SrsAsyncLogManager* _srs_async_log;
 
 #endif

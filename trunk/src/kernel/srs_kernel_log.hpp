@@ -61,8 +61,6 @@ public:
 public:
     // Initialize log utilities.
     virtual srs_error_t initialize() = 0;
-    // Reopen the log file for log rotate.
-    virtual void reopen() = 0;
 public:
     // The log for verbose, very verbose information.
     virtual void verbose(const char* tag, SrsContextId context_id, const char* fmt, ...) = 0;

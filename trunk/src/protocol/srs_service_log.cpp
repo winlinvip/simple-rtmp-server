@@ -134,10 +134,6 @@ srs_error_t SrsConsoleLog::initialize()
     return srs_success;
 }
 
-void SrsConsoleLog::reopen()
-{
-}
-
 void SrsConsoleLog::verbose(const char* tag, SrsContextId context_id, const char* fmt, ...)
 {
     if (level > SrsLogLevelVerbose) {

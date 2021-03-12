@@ -27,6 +27,7 @@
 #include <srs_app_config.hpp>
 #include <srs_app_log.hpp>
 #include <srs_core_autofree.hpp>
+#include <srs_kernel_utility.hpp>
 
 #include <unistd.h>
 
@@ -90,8 +91,20 @@ SrsThreadPool::SrsThreadPool()
 {
     entry_ = NULL;
     lock_ = new SrsThreadMutex();
+
+    // Add primordial thread, current thread itself.
+    SrsThreadEntry* entry = new SrsThreadEntry();
+    threads_.push_back(entry);
+    entry_ = entry;
+
+    entry->pool = this;
+    entry->label = "primordial";
+    entry->start = NULL;
+    entry->arg = NULL;
+    entry->num = 1;
 }
 
+// TODO: FIMXE: If free the pool, we should stop all threads.
 SrsThreadPool::~SrsThreadPool()
 {
     srs_freep(lock_);
@@ -106,18 +119,12 @@ srs_error_t SrsThreadPool::initialize()
         return srs_error_wrap(err, "initialize st failed");
     }
 
-    // Add primordial thread, current thread itself.
-    SrsThreadEntry* entry = new SrsThreadEntry();
-    threads_.push_back(entry);
-    entry_ = entry;
+    if ((err = _srs_async_log->initialize()) != srs_success) {
+        return srs_error_wrap(err, "init async log");
+    }
 
-    entry->pool = this;
-    entry->label = "primordial";
-    entry->start = NULL;
-    entry->arg = NULL;
-    entry->num = 1;
-
-    srs_trace("Thread #%d: %s init", entry_->num, entry_->label.c_str());
+    interval_ = _srs_config->get_threads_interval();
+    srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
 
     return err;
 }
@@ -163,9 +170,11 @@ srs_error_t SrsThreadPool::run()
     srs_error_t err = srs_success;
 
     while (true) {
-        srs_trace("Thread #%d: %s run, threads=%d", entry_->num, entry_->label.c_str(),
-            (int)threads_.size());
-        sleep(60);
+        string async_logs = _srs_async_log->desc();
+        srs_trace("Thread #%d(%s): cycle threads=%d%s", entry_->num, entry_->label.c_str(), (int)threads_.size(),
+            async_logs.c_str());
+
+        sleep(interval_ / SRS_UTIME_SECONDS);
     }
 
     return err;
@@ -181,7 +190,7 @@ void* SrsThreadPool::start(void* arg)
     srs_error_t err = srs_success;
 
     SrsThreadEntry* entry = (SrsThreadEntry*)arg;
-    srs_trace("Thread #%d: %s run", entry->num, entry->label.c_str());
+    srs_trace("Thread #%d(%s): run", entry->num, entry->label.c_str());
 
     if ((err = entry->start(entry->arg)) != srs_success) {
         entry->err = err;
@@ -192,3 +201,238 @@ void* SrsThreadPool::start(void* arg)
 }
 
 SrsThreadPool* _srs_thread_pool = new SrsThreadPool();
+
+SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
+{
+    filename_ = p;
+    lock_ = new SrsThreadMutex();
+    writer_ = new SrsFileWriter();
+}
+
+// TODO: FIXME: Before free the writer, we must remove it from the manager.
+SrsAsyncFileWriter::~SrsAsyncFileWriter()
+{
+    srs_freep(writer_);
+    srs_freep(lock_);
+
+    // TODO: FIXME: Should we flush these logs?
+    for (int i = 0; i < (int)dirty_.size(); i++) {
+        SrsSharedPtrMessage* msg = dirty_.at(i);
+        srs_freep(msg);
+    }
+}
+
+srs_error_t SrsAsyncFileWriter::open()
+{
+    return writer_->open(filename_);
+}
+
+srs_error_t SrsAsyncFileWriter::open_append()
+{
+    return writer_->open_append(filename_);
+}
+
+void SrsAsyncFileWriter::close()
+{
+    writer_->close();
+}
+
+srs_error_t SrsAsyncFileWriter::write(void* buf, size_t count, ssize_t* pnwrite)
+{
+    srs_error_t err = srs_success;
+
+    if (count <= 0) {
+        return err;
+    }
+
+    char* cp = new char[count];
+    memcpy(cp, buf, count);
+
+    SrsSharedPtrMessage* msg = new SrsSharedPtrMessage();
+    msg->wrap(cp, count);
+
+    if (true) {
+        SrsThreadLocker(lock_);
+        dirty_.push_back(msg);
+    }
+
+    if (pnwrite) {
+        *pnwrite = count;
+    }
+
+    return err;
+}
+
+srs_error_t SrsAsyncFileWriter::writev(const iovec* iov, int iovcnt, ssize_t* pnwrite)
+{
+    srs_error_t err = srs_success;
+
+    for (int i = 0; i < iovcnt; i++) {
+        const iovec* p = iov + i;
+
+        ssize_t nn = 0;
+        if ((err = write(p->iov_base, p->iov_len, &nn)) != srs_success) {
+            return srs_error_wrap(err, "write %d iov %d bytes", i, p->iov_len);
+        }
+
+        if (pnwrite) {
+            *pnwrite += nn;
+        }
+    }
+
+    return err;
+}
+
+srs_error_t SrsAsyncFileWriter::flush()
+{
+    srs_error_t err = srs_success;
+
+    vector<SrsSharedPtrMessage*> flying;
+    if (true) {
+        SrsThreadLocker(lock_);
+        dirty_.swap(flying);
+    }
+
+    for (int i = 0; i < (int)flying.size(); i++) {
+        SrsSharedPtrMessage* msg = flying.at(i);
+
+        srs_error_t r0 = writer_->write(msg->payload, msg->size, NULL);
+
+        // Choose a random error to return.
+        if (err == srs_success) {
+            err = r0;
+        } else {
+            srs_freep(r0);
+        }
+
+        srs_freep(msg);
+    }
+
+    return err;
+}
+
+SrsAsyncLogManager::SrsAsyncLogManager()
+{
+    interval_ = 0;
+    reopen_ = false;
+    lock_ = new SrsThreadMutex();
+}
+
+// TODO: FIXME: We should stop the thread first, then free the manager.
+SrsAsyncLogManager::~SrsAsyncLogManager()
+{
+    srs_freep(lock_);
+
+    for (int i = 0; i < (int)writers_.size(); i++) {
+        SrsAsyncFileWriter* writer = writers_.at(i);
+        srs_freep(writer);
+    }
+}
+
+srs_error_t SrsAsyncLogManager::initialize()
+{
+    srs_error_t err =  srs_success;
+
+    interval_ = _srs_config->srs_log_flush_interval();
+    if (interval_ <= 0) {
+        return srs_error_new(ERROR_SYSTEM_LOGFILE, "invalid interval=%dms", srsu2msi(interval_));
+    }
+
+    if ((err = _srs_thread_pool->execute("log", SrsAsyncLogManager::start, this)) != srs_success) {
+        return srs_error_wrap(err, "run async log");
+    }
+
+    return err;
+}
+
+srs_error_t SrsAsyncLogManager::create_writer(std::string filename, SrsAsyncFileWriter** ppwriter)
+{
+    srs_error_t err = srs_success;
+
+    SrsAsyncFileWriter* writer = new SrsAsyncFileWriter(filename);
+    writers_.push_back(writer);
+
+    if ((err = writer->open()) != srs_success) {
+        return srs_error_wrap(err, "open file %s fail", filename.c_str());
+    }
+
+    *ppwriter = writer;
+    return err;
+}
+
+void SrsAsyncLogManager::reopen()
+{
+    SrsThreadLocker(lock_);
+    reopen_ = true;
+}
+
+std::string SrsAsyncLogManager::desc()
+{
+    SrsThreadLocker(lock_);
+
+    int nn_logs = 0;
+    int max_logs = 0;
+    for (int i = 0; i < (int)writers_.size(); i++) {
+        SrsAsyncFileWriter* writer = writers_.at(i);
+
+        nn_logs += (int)writer->dirty_.size();
+        max_logs = srs_max(max_logs, (int)writer->dirty_.size());
+    }
+
+    static char buf[128];
+    snprintf(buf, sizeof(buf), ", files=%d, queue=%d, max=%d", (int)writers_.size(), nn_logs, max_logs);
+    return buf;
+}
+
+srs_error_t SrsAsyncLogManager::start(void* arg)
+{
+    SrsAsyncLogManager* log = (SrsAsyncLogManager*)arg;
+    return log->do_start();
+}
+
+srs_error_t SrsAsyncLogManager::do_start()
+{
+    srs_error_t err = srs_success;
+
+    // Never quit for this thread.
+    while (true) {
+        // Reopen all log files.
+        if (reopen_) {
+            SrsThreadLocker(lock_);
+            reopen_ = false;
+
+            for (int i = 0; i < (int)writers_.size(); i++) {
+                SrsAsyncFileWriter* writer = writers_.at(i);
+
+                writer->close();
+                if ((err = writer->open()) != srs_success) {
+                    srs_error_reset(err); // Ignore any error for reopen logs.
+                }
+            }
+        }
+
+        // Flush all logs from cache to disk.
+        if (true) {
+            SrsThreadLocker(lock_);
+
+            for (int i = 0; i < (int)writers_.size(); i++) {
+                SrsAsyncFileWriter* writer = writers_.at(i);
+
+                if ((err = writer->flush()) != srs_success) {
+                    srs_error_reset(err); // Ignore any error for flushing logs.
+                }
+            }
+        }
+
+        // We use the system primordial sleep, not the ST sleep, because
+        // this is a system thread, not a coroutine.
+        timespec tv = {0};
+        tv.tv_sec = interval_ / SRS_UTIME_SECONDS;
+        tv.tv_nsec = (interval_ % SRS_UTIME_MILLISECONDS) * 1000;
+        nanosleep(&tv, NULL);
+    }
+
+    return err;
+}
+
+SrsAsyncLogManager* _srs_async_log = new SrsAsyncLogManager();

@@ -40,6 +40,7 @@ using namespace std;
 #include <srs_app_rtmp_conn.hpp>
 #include <srs_app_config.hpp>
 #include <srs_kernel_utility.hpp>
+#include <srs_app_threads.hpp>
 #include <srs_app_http_api.hpp>
 #include <srs_app_http_conn.hpp>
 #include <srs_app_ingest.hpp>
@@ -1132,7 +1133,7 @@ void SrsServer::on_signal(int signo)
     
 #ifndef SRS_GPERF_MC
     if (signo == SRS_SIGNAL_REOPEN_LOG) {
-        _srs_log->reopen();
+        _srs_async_log->reopen();
 
         if (handler) {
             handler->on_logrotate();

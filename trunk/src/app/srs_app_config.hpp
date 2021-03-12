@@ -367,16 +367,8 @@ public:
     virtual srs_error_t raw_set_chunk_size(std::string chunk_size, bool& applied);
     // RAW  set the global ffmpeg log dir.
     virtual srs_error_t raw_set_ff_log_dir(std::string ff_log_dir, bool& applied);
-    // RAW  set the global log tank.
-    virtual srs_error_t raw_set_srs_log_tank(std::string srs_log_tank, bool& applied);
-    // RAW  set the global log level.
-    virtual srs_error_t raw_set_srs_log_level(std::string srs_log_level, bool& applied);
-    // RAW  set the global log file path for file tank.
-    virtual srs_error_t raw_set_srs_log_file(std::string srs_log_file, bool& applied);
     // RAW  set the global max connections of srs.
     virtual srs_error_t raw_set_max_connections(std::string max_connections, bool& applied);
-    // RAW  set the global whether use utc time.
-    virtual srs_error_t raw_set_utc_time(std::string utc_time, bool& applied);
     // RAW  set the global pithy print interval in ms.
     virtual srs_error_t raw_set_pithy_print_ms(std::string pithy_print_ms, bool& applied);
     // RAW  create the new vhost.
@@ -396,11 +388,7 @@ public:
 private:
     virtual srs_error_t do_reload_listen();
     virtual srs_error_t do_reload_pid();
-    virtual srs_error_t do_reload_srs_log_tank();
-    virtual srs_error_t do_reload_srs_log_level();
-    virtual srs_error_t do_reload_srs_log_file();
     virtual srs_error_t do_reload_max_connections();
-    virtual srs_error_t do_reload_utc_time();
     virtual srs_error_t do_reload_pithy_print_ms();
     virtual srs_error_t do_reload_vhost_added(std::string vhost);
     virtual srs_error_t do_reload_vhost_removed(std::string vhost);
@@ -487,6 +475,9 @@ public:
     virtual bool auto_reload_for_docker();
     // For tcmalloc, get the release rate.
     virtual double tcmalloc_release_rate();
+// Thread pool section.
+public:
+    virtual srs_utime_t get_threads_interval();
 // stream_caster section
 public:
     // Get all stream_caster in config file.
@@ -901,6 +892,8 @@ public:
     virtual std::string get_log_level();
     // Get the log file path.
     virtual std::string get_log_file();
+    // Get the interval in ms to flush asyn log.
+    virtual srs_utime_t srs_log_flush_interval();
     // Whether ffmpeg log enabled
     virtual bool get_ff_log_enabled();
     // The ffmpeg log dir.

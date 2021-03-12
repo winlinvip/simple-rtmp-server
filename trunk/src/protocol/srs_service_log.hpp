@@ -76,7 +76,6 @@ public:
 // Interface ISrsLog
 public:
     virtual srs_error_t initialize();
-    virtual void reopen();
     virtual void verbose(const char* tag, SrsContextId context_id, const char* fmt, ...);
     virtual void info(const char* tag, SrsContextId context_id, const char* fmt, ...);
     virtual void trace(const char* tag, SrsContextId context_id, const char* fmt, ...);

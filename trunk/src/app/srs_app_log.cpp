@@ -30,11 +30,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 
 #include <srs_app_config.hpp>
 #include <srs_kernel_error.hpp>
 #include <srs_app_utility.hpp>
 #include <srs_kernel_utility.hpp>
+#include <srs_app_threads.hpp>
 
 // the max size of a line of log.
 #define LOG_MAX_SIZE 8192
@@ -47,51 +49,43 @@
 SrsFileLog::SrsFileLog()
 {
     level = SrsLogLevelTrace;
-    log_data = new char[LOG_MAX_SIZE];
-    
-    fd = -1;
     log_to_file_tank = false;
     utc = false;
+
+    log_data = new char[LOG_MAX_SIZE];
+    writer_ = NULL;
 }
 
 SrsFileLog::~SrsFileLog()
 {
     srs_freepa(log_data);
-    
-    if (fd > 0) {
-        ::close(fd);
-        fd = -1;
-    }
-    
-    if (_srs_config) {
-        _srs_config->unsubscribe(this);
-    }
 }
 
 srs_error_t SrsFileLog::initialize()
 {
+    srs_error_t err = srs_success;
+
     if (_srs_config) {
-        _srs_config->subscribe(this);
-        
         log_to_file_tank = _srs_config->get_log_tank_file();
+        filename_ = _srs_config->get_log_file();
         level = srs_get_log_level(_srs_config->get_log_level());
         utc = _srs_config->get_utc_time();
     }
-    
-    return srs_success;
-}
 
-void SrsFileLog::reopen()
-{
-    if (fd > 0) {
-        ::close(fd);
-    }
-    
     if (!log_to_file_tank) {
-        return;
+        return err;
+    }
+
+    if (filename_.empty()) {
+        return srs_error_new(ERROR_SYSTEM_LOGFILE, "no log filename");
+    }
+
+    // We only use the log writer, which is managed by another thread.
+    if ((err = _srs_async_log->create_writer(filename_, &writer_)) != srs_success) {
+        return srs_error_wrap(err, "create async writer for %s", filename_.c_str());
     }
     
-    open_log_file();
+    return err;
 }
 
 void SrsFileLog::verbose(const char* tag, SrsContextId context_id, const char* fmt, ...)
@@ -111,7 +105,7 @@ void SrsFileLog::verbose(const char* tag, SrsContextId context_id, const char* f
     size += vsnprintf(log_data + size, LOG_MAX_SIZE - size, fmt, ap);
     va_end(ap);
     
-    write_log(fd, log_data, size, SrsLogLevelVerbose);
+    write_log(log_data, size, SrsLogLevelVerbose);
 }
 
 void SrsFileLog::info(const char* tag, SrsContextId context_id, const char* fmt, ...)
@@ -131,7 +125,7 @@ void SrsFileLog::info(const char* tag, SrsContextId context_id, const char* fmt,
     size += vsnprintf(log_data + size, LOG_MAX_SIZE - size, fmt, ap);
     va_end(ap);
     
-    write_log(fd, log_data, size, SrsLogLevelInfo);
+    write_log(log_data, size, SrsLogLevelInfo);
 }
 
 void SrsFileLog::trace(const char* tag, SrsContextId context_id, const char* fmt, ...)
@@ -151,7 +145,7 @@ void SrsFileLog::trace(const char* tag, SrsContextId context_id, const char* fmt
     size += vsnprintf(log_data + size, LOG_MAX_SIZE - size, fmt, ap);
     va_end(ap);
     
-    write_log(fd, log_data, size, SrsLogLevelTrace);
+    write_log(log_data, size, SrsLogLevelTrace);
 }
 
 void SrsFileLog::warn(const char* tag, SrsContextId context_id, const char* fmt, ...)
@@ -171,7 +165,7 @@ void SrsFileLog::warn(const char* tag, SrsContextId context_id, const char* fmt,
     size += vsnprintf(log_data + size, LOG_MAX_SIZE - size, fmt, ap);
     va_end(ap);
     
-    write_log(fd, log_data, size, SrsLogLevelWarn);
+    write_log(log_data, size, SrsLogLevelWarn);
 }
 
 void SrsFileLog::error(const char* tag, SrsContextId context_id, const char* fmt, ...)
@@ -197,78 +191,13 @@ void SrsFileLog::error(const char* tag, SrsContextId context_id, const char* fmt
         size += snprintf(log_data + size, LOG_MAX_SIZE - size, "(%s)", strerror(errno));
     }
     
-    write_log(fd, log_data, size, SrsLogLevelError);
+    write_log(log_data, size, SrsLogLevelError);
 }
 
-srs_error_t SrsFileLog::on_reload_utc_time()
-{
-    utc = _srs_config->get_utc_time();
-    
-    return srs_success;
-}
-
-srs_error_t SrsFileLog::on_reload_log_tank()
+void SrsFileLog::write_log(char *str_log, int size, int level)
 {
     srs_error_t err = srs_success;
-    
-    if (!_srs_config) {
-        return err;
-    }
-    
-    bool tank = log_to_file_tank;
-    log_to_file_tank = _srs_config->get_log_tank_file();
-    
-    if (tank) {
-        return err;
-    }
-    
-    if (!log_to_file_tank) {
-        return err;
-    }
-    
-    if (fd > 0) {
-        ::close(fd);
-    }
-    open_log_file();
-    
-    return err;
-}
 
-srs_error_t SrsFileLog::on_reload_log_level()
-{
-    srs_error_t err = srs_success;
-    
-    if (!_srs_config) {
-        return err;
-    }
-    
-    level = srs_get_log_level(_srs_config->get_log_level());
-    
-    return err;
-}
-
-srs_error_t SrsFileLog::on_reload_log_file()
-{
-    srs_error_t err = srs_success;
-    
-    if (!_srs_config) {
-        return err;
-    }
-    
-    if (!log_to_file_tank) {
-        return err;
-    }
-    
-    if (fd > 0) {
-        ::close(fd);
-    }
-    open_log_file();
-    
-    return err;
-}
-
-void SrsFileLog::write_log(int& fd, char *str_log, int size, int level)
-{
     // ensure the tail and EOF of string
     //      LOG_TAIL_SIZE for the TAIL char.
     //      1 for the last char(0).
@@ -296,32 +225,9 @@ void SrsFileLog::write_log(int& fd, char *str_log, int size, int level)
         return;
     }
     
-    // open log file. if specified
-    if (fd < 0) {
-        open_log_file();
-    }
-    
     // write log to file.
-    if (fd > 0) {
-        ::write(fd, str_log, size);
+    if ((err = writer_->write(str_log, size, NULL)) != srs_success) {
+        srs_error_reset(err); // Ignore any error for log writing.
     }
-}
-
-void SrsFileLog::open_log_file()
-{
-    if (!_srs_config) {
-        return;
-    }
-    
-    std::string filename = _srs_config->get_log_file();
-    
-    if (filename.empty()) {
-        return;
-    }
-
-    fd = ::open(filename.c_str(),
-        O_RDWR | O_CREAT | O_APPEND,
-        S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH
-    );
 }
 
