@@ -170,7 +170,7 @@ srs_error_t SrsThreadPool::run()
     srs_error_t err = srs_success;
 
     while (true) {
-        string async_logs = _srs_async_log->desc();
+        string async_logs = _srs_async_log->description();
         srs_trace("Thread #%d(%s): cycle threads=%d%s", entry_->num, entry_->label.c_str(), (int)threads_.size(),
             async_logs.c_str());
 
@@ -205,21 +205,16 @@ SrsThreadPool* _srs_thread_pool = new SrsThreadPool();
 SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
 {
     filename_ = p;
-    lock_ = new SrsThreadMutex();
     writer_ = new SrsFileWriter();
+    queue_ = new SrsThreadQueue<SrsSharedPtrMessage>();
 }
 
 // TODO: FIXME: Before free the writer, we must remove it from the manager.
 SrsAsyncFileWriter::~SrsAsyncFileWriter()
 {
+    // TODO: FIXME: Should we flush dirty logs?
     srs_freep(writer_);
-    srs_freep(lock_);
-
-    // TODO: FIXME: Should we flush these logs?
-    for (int i = 0; i < (int)dirty_.size(); i++) {
-        SrsSharedPtrMessage* msg = dirty_.at(i);
-        srs_freep(msg);
-    }
+    srs_freep(queue_);
 }
 
 srs_error_t SrsAsyncFileWriter::open()
@@ -251,10 +246,7 @@ srs_error_t SrsAsyncFileWriter::write(void* buf, size_t count, ssize_t* pnwrite)
     SrsSharedPtrMessage* msg = new SrsSharedPtrMessage();
     msg->wrap(cp, count);
 
-    if (true) {
-        SrsThreadLocker(lock_);
-        dirty_.push_back(msg);
-    }
+    queue_->push_back(msg);
 
     if (pnwrite) {
         *pnwrite = count;
@@ -288,10 +280,7 @@ srs_error_t SrsAsyncFileWriter::flush()
     srs_error_t err = srs_success;
 
     vector<SrsSharedPtrMessage*> flying;
-    if (true) {
-        SrsThreadLocker(lock_);
-        dirty_.swap(flying);
-    }
+    queue_->swap(flying);
 
     for (int i = 0; i < (int)flying.size(); i++) {
         SrsSharedPtrMessage* msg = flying.at(i);
@@ -366,7 +355,7 @@ void SrsAsyncLogManager::reopen()
     reopen_ = true;
 }
 
-std::string SrsAsyncLogManager::desc()
+std::string SrsAsyncLogManager::description()
 {
     SrsThreadLocker(lock_);
 
@@ -375,8 +364,9 @@ std::string SrsAsyncLogManager::desc()
     for (int i = 0; i < (int)writers_.size(); i++) {
         SrsAsyncFileWriter* writer = writers_.at(i);
 
-        nn_logs += (int)writer->dirty_.size();
-        max_logs = srs_max(max_logs, (int)writer->dirty_.size());
+        int nn = (int)writer->queue_->size();
+        nn_logs += nn;
+        max_logs = srs_max(max_logs, nn);
     }
 
     static char buf[128];

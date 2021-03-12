@@ -116,6 +116,44 @@ private:
 // The global thread pool.
 extern SrsThreadPool* _srs_thread_pool;
 
+// Thread-safe queue.
+template<typename T>
+class SrsThreadQueue
+{
+private:
+    std::vector<T*> dirty_;
+    SrsThreadMutex* lock_;
+public:
+    // SrsThreadQueue::SrsThreadQueue
+    SrsThreadQueue() {
+        lock_ = new SrsThreadMutex();
+    }
+    // SrsThreadQueue::~SrsThreadQueue
+    virtual ~SrsThreadQueue() {
+        srs_freep(lock_);
+        for (int i = 0; i < (int)dirty_.size(); i++) {
+            T* msg = dirty_.at(i);
+            srs_freep(msg);
+        }
+    }
+public:
+    // SrsThreadQueue::push_back
+    void push_back(T* msg) {
+        SrsThreadLocker(lock_);
+        dirty_.push_back(msg);
+    }
+    // SrsThreadQueue::swap
+    void swap(std::vector<T*>& flying) {
+        SrsThreadLocker(lock_);
+        dirty_.swap(flying);
+    }
+    // SrsThreadQueue::size
+    size_t size() {
+        SrsThreadLocker(lock_);
+        return dirty_.size();
+    }
+};
+
 // Async file writer.
 class SrsAsyncFileWriter : public ISrsWriter
 {
@@ -123,8 +161,7 @@ class SrsAsyncFileWriter : public ISrsWriter
 private:
     std::string filename_;
     SrsFileWriter* writer_;
-    std::vector<SrsSharedPtrMessage*> dirty_;
-    SrsThreadMutex* lock_;
+    SrsThreadQueue<SrsSharedPtrMessage>* queue_;
 private:
     SrsAsyncFileWriter(std::string p);
     virtual ~SrsAsyncFileWriter();
@@ -168,7 +205,8 @@ public:
     // Reopen all log files, asynchronously.
     virtual void reopen();
 public:
-    std::string desc();
+    // Get the summary of this manager.
+    std::string description();
 private:
     static srs_error_t start(void* arg);
     srs_error_t do_start();
