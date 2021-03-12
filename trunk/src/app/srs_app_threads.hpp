@@ -38,6 +38,7 @@ class SrsThreadMutex
 {
 private:
     pthread_mutex_t lock_;
+    pthread_mutexattr_t attr_;
 public:
     SrsThreadMutex();
     virtual ~SrsThreadMutex();
@@ -78,8 +79,9 @@ public:
     pthread_t trd;
     // The exit error of thread.
     srs_error_t err;
-
+public:
     SrsThreadEntry();
+    virtual ~SrsThreadEntry();
 };
 
 // Allocate a(or almost) fixed thread poll to execute tasks,

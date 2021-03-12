@@ -34,8 +34,16 @@ using namespace std;
 
 SrsThreadMutex::SrsThreadMutex()
 {
+    // https://man7.org/linux/man-pages/man3/pthread_mutexattr_init.3.html
+    int r0 = pthread_mutexattr_init(&attr_);
+    srs_assert(!r0);
+
+    // https://man7.org/linux/man-pages/man3/pthread_mutexattr_gettype.3p.html
+    r0 = pthread_mutexattr_settype(&attr_, PTHREAD_MUTEX_ERRORCHECK);
+    srs_assert(!r0);
+
     // https://michaelkerrisk.com/linux/man-pages/man3/pthread_mutex_init.3p.html
-    int r0 = pthread_mutex_init(&lock_, NULL);
+    r0 = pthread_mutex_init(&lock_, &attr_);
     srs_assert(!r0);
 }
 
@@ -43,11 +51,17 @@ SrsThreadMutex::~SrsThreadMutex()
 {
     int r0 = pthread_mutex_destroy(&lock_);
     srs_assert(!r0);
+
+    r0 = pthread_mutexattr_destroy(&attr_);
+    srs_assert(!r0);
 }
 
 void SrsThreadMutex::lock()
 {
     // https://man7.org/linux/man-pages/man3/pthread_mutex_lock.3p.html
+    //        EDEADLK
+    //                 The mutex type is PTHREAD_MUTEX_ERRORCHECK and the current
+    //                 thread already owns the mutex.
     int r0 = pthread_mutex_lock(&lock_);
     srs_assert(!r0);
 }
@@ -66,6 +80,10 @@ SrsThreadEntry::SrsThreadEntry()
     num = 0;
 
     err = srs_success;
+}
+
+SrsThreadEntry::~SrsThreadEntry()
+{
 }
 
 SrsThreadPool::SrsThreadPool()
@@ -108,10 +126,9 @@ srs_error_t SrsThreadPool::execute(string label, srs_error_t (*start)(void* arg)
 {
     srs_error_t err = srs_success;
 
-    static int num = entry_->num + 1;
-
     SrsThreadEntry* entry = new SrsThreadEntry();
 
+    // To protect the threads_ for executing thread-safe.
     if (true) {
         SrsThreadLocker(lock_);
         threads_.push_back(entry);
@@ -121,13 +138,18 @@ srs_error_t SrsThreadPool::execute(string label, srs_error_t (*start)(void* arg)
     entry->label = label;
     entry->start = start;
     entry->arg = arg;
+
+    // The id of thread, should equal to the debugger thread id.
+    // For gdb, it's: info threads
+    // For lldb, it's: thread list
+    static int num = entry_->num + 1;
     entry->num = num++;
 
     // https://man7.org/linux/man-pages/man3/pthread_create.3.html
     pthread_t trd;
     int r0 = pthread_create(&trd, NULL, SrsThreadPool::start, entry);
     if (r0 != 0) {
-        entry->err = srs_error_new(ERROR_THREAD_CREATE, "create thread %s", label.c_str());
+        entry->err = srs_error_new(ERROR_THREAD_CREATE, "create thread %s, r0=%d", label.c_str(), r0);
         return srs_error_copy(entry->err);
     }
 
