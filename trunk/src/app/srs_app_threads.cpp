@@ -110,6 +110,7 @@ SrsThreadPool::~SrsThreadPool()
     srs_freep(lock_);
 }
 
+// @remark Note that we should never write logs, because log is not ready not.
 srs_error_t SrsThreadPool::initialize()
 {
     srs_error_t err = srs_success;
@@ -119,12 +120,7 @@ srs_error_t SrsThreadPool::initialize()
         return srs_error_wrap(err, "initialize st failed");
     }
 
-    if ((err = _srs_async_log->initialize()) != srs_success) {
-        return srs_error_wrap(err, "init async log");
-    }
-
     interval_ = _srs_config->get_threads_interval();
-    srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
 
     return err;
 }
@@ -169,12 +165,15 @@ srs_error_t SrsThreadPool::run()
 {
     srs_error_t err = srs_success;
 
+    // Write the init log here.
+    srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
+
     while (true) {
+        sleep(interval_ / SRS_UTIME_SECONDS);
+
         string async_logs = _srs_async_log->description();
         srs_trace("Thread #%d(%s): cycle threads=%d%s", entry_->num, entry_->label.c_str(), (int)threads_.size(),
             async_logs.c_str());
-
-        sleep(interval_ / SRS_UTIME_SECONDS);
     }
 
     return err;
@@ -202,11 +201,14 @@ void* SrsThreadPool::start(void* arg)
 
 SrsThreadPool* _srs_thread_pool = new SrsThreadPool();
 
-SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
+SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p, srs_utime_t interval)
 {
     filename_ = p;
     writer_ = new SrsFileWriter();
     queue_ = new SrsThreadQueue<SrsSharedPtrMessage>();
+    co_queue_ = new SrsCoroutineQueue<SrsSharedPtrMessage>();
+    interval_ = interval;
+    last_flush_time_ = srs_get_system_time();
 }
 
 // TODO: FIXME: Before free the writer, we must remove it from the manager.
@@ -215,6 +217,7 @@ SrsAsyncFileWriter::~SrsAsyncFileWriter()
     // TODO: FIXME: Should we flush dirty logs?
     srs_freep(writer_);
     srs_freep(queue_);
+    srs_freep(co_queue_);
 }
 
 srs_error_t SrsAsyncFileWriter::open()
@@ -246,7 +249,16 @@ srs_error_t SrsAsyncFileWriter::write(void* buf, size_t count, ssize_t* pnwrite)
     SrsSharedPtrMessage* msg = new SrsSharedPtrMessage();
     msg->wrap(cp, count);
 
-    queue_->push_back(msg);
+    co_queue_->push_back(msg);
+
+    // Whether flush to thread-queue.
+    if (srs_get_system_time() - last_flush_time_ >= interval_) {
+        last_flush_time_ = srs_get_system_time();
+
+        vector<SrsSharedPtrMessage*> flying;
+        co_queue_->swap(flying);
+        queue_->push_back(flying);
+    }
 
     if (pnwrite) {
         *pnwrite = count;
@@ -303,6 +315,7 @@ srs_error_t SrsAsyncFileWriter::flush()
 SrsAsyncLogManager::SrsAsyncLogManager()
 {
     interval_ = 0;
+
     reopen_ = false;
     lock_ = new SrsThreadMutex();
 }
@@ -318,6 +331,7 @@ SrsAsyncLogManager::~SrsAsyncLogManager()
     }
 }
 
+// @remark Note that we should never write logs, because log is not ready not.
 srs_error_t SrsAsyncLogManager::initialize()
 {
     srs_error_t err =  srs_success;
@@ -327,9 +341,19 @@ srs_error_t SrsAsyncLogManager::initialize()
         return srs_error_new(ERROR_SYSTEM_LOGFILE, "invalid interval=%dms", srsu2msi(interval_));
     }
 
+    return err;
+}
+
+// @remark Now, log is ready, and we can print logs.
+srs_error_t SrsAsyncLogManager::run()
+{
+    srs_error_t err =  srs_success;
+
     if ((err = _srs_thread_pool->execute("log", SrsAsyncLogManager::start, this)) != srs_success) {
         return srs_error_wrap(err, "run async log");
     }
+
+    srs_trace("AsyncLogs: Init flush_interval=%dms", srsu2msi(interval_));
 
     return err;
 }
@@ -338,7 +362,7 @@ srs_error_t SrsAsyncLogManager::create_writer(std::string filename, SrsAsyncFile
 {
     srs_error_t err = srs_success;
 
-    SrsAsyncFileWriter* writer = new SrsAsyncFileWriter(filename);
+    SrsAsyncFileWriter* writer = new SrsAsyncFileWriter(filename, interval_);
     writers_.push_back(writer);
 
     if ((err = writer->open()) != srs_success) {
@@ -369,8 +393,20 @@ std::string SrsAsyncLogManager::description()
         max_logs = srs_max(max_logs, nn);
     }
 
+    int nn_co_logs = 0;
+    int max_co_logs = 0;
+    for (int i = 0; i < (int)writers_.size(); i++) {
+        SrsAsyncFileWriter* writer = writers_.at(i);
+
+        int nn = (int)writer->co_queue_->size();
+        nn_co_logs += nn;
+        max_co_logs = srs_max(max_co_logs, nn);
+    }
+
     static char buf[128];
-    snprintf(buf, sizeof(buf), ", files=%d, queue=%d/%d", (int)writers_.size(), nn_logs, max_logs);
+    snprintf(buf, sizeof(buf), ", files=%d, queue=%d/%d, coq=%d/%d",
+        (int)writers_.size(), nn_logs, max_logs, nn_co_logs, max_co_logs);
+
     return buf;
 }
 

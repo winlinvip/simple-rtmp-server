@@ -116,6 +116,37 @@ private:
 // The global thread pool.
 extern SrsThreadPool* _srs_thread_pool;
 
+// We use coroutine queue to collect messages from different coroutines,
+// then swap to the SrsThreadQueue and process by another thread.
+template<typename T>
+class SrsCoroutineQueue
+{
+private:
+    std::vector<T*> dirty_;
+public:
+    SrsCoroutineQueue() {
+    }
+    virtual ~SrsCoroutineQueue() {
+        for (int i = 0; i < (int)dirty_.size(); i++) {
+            T* msg = dirty_.at(i);
+            srs_freep(msg);
+        }
+    }
+public:
+    // SrsCoroutineQueue::push_back
+    void push_back(T* msg) {
+        dirty_.push_back(msg);
+    }
+    // SrsCoroutineQueue::swap
+    void swap(std::vector<T*>& flying) {
+        dirty_.swap(flying);
+    }
+    // SrsCoroutineQueue::size
+    size_t size() {
+        return dirty_.size();
+    }
+};
+
 // Thread-safe queue.
 template<typename T>
 class SrsThreadQueue
@@ -142,6 +173,11 @@ public:
         SrsThreadLocker(lock_);
         dirty_.push_back(msg);
     }
+    // SrsThreadQueue::push_back
+    void push_back(std::vector<T*>& flying) {
+        SrsThreadLocker(lock_);
+        dirty_.insert(dirty_.end(), flying.begin(), flying.end());
+    }
     // SrsThreadQueue::swap
     void swap(std::vector<T*>& flying) {
         SrsThreadLocker(lock_);
@@ -161,9 +197,18 @@ class SrsAsyncFileWriter : public ISrsWriter
 private:
     std::string filename_;
     SrsFileWriter* writer_;
+private:
+    // The thread-queue, to flush to disk by dedicated thread.
     SrsThreadQueue<SrsSharedPtrMessage>* queue_;
 private:
-    SrsAsyncFileWriter(std::string p);
+    // The interval to flush from coroutine-queue to thread-queue.
+    srs_utime_t interval_;
+    // Last flush coroutine-queue time, to calculate the timeout.
+    srs_utime_t last_flush_time_;
+    // The coroutine-queue, to avoid requires lock for each log.
+    SrsCoroutineQueue<SrsSharedPtrMessage>* co_queue_;
+private:
+    SrsAsyncFileWriter(std::string p, srs_utime_t interval);
     virtual ~SrsAsyncFileWriter();
 public:
     // Open file writer, in truncate mode.
@@ -188,6 +233,8 @@ class SrsAsyncLogManager
 private:
     // The async flush interval.
     srs_utime_t interval_;
+    // The number of logs to flush from coroutine-queue to thread-queue.
+    int flush_co_queue_;
 private:
     // The async reopen event.
     bool reopen_;
@@ -200,6 +247,8 @@ public:
 public:
     // Initialize the async log manager.
     srs_error_t initialize();
+    // Run the async log manager thread.
+    srs_error_t run();
     // Create a managed writer, user should never free it.
     srs_error_t create_writer(std::string filename, SrsAsyncFileWriter** ppwriter);
     // Reopen all log files, asynchronously.

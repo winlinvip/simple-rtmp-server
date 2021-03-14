@@ -61,6 +61,7 @@ SrsFileLog::~SrsFileLog()
     srs_freepa(log_data);
 }
 
+// @remark Note that we should never write logs, because log is not ready not.
 srs_error_t SrsFileLog::initialize()
 {
     srs_error_t err = srs_success;
