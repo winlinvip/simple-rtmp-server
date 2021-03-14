@@ -244,9 +244,9 @@ bool srs_log_header(char* buffer, int size, bool utc, bool dangerous, const char
 {
     // clock time
     timeval tv;
-    if (gettimeofday(&tv, NULL) == -1) {
-        return false;
-    }
+    srs_utime_t now = srs_update_system_time();
+    tv.tv_sec = now / SRS_UTIME_SECONDS;
+    tv.tv_usec = now % SRS_UTIME_SECONDS;
     
     // to calendar time
     struct tm* tm;

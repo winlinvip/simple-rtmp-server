@@ -4107,7 +4107,7 @@ double SrsConfig::tcmalloc_release_rate()
 
 srs_utime_t SrsConfig::get_threads_interval()
 {
-    static srs_utime_t DEFAULT = 60 * SRS_UTIME_SECONDS;
+    static srs_utime_t DEFAULT = 5 * SRS_UTIME_SECONDS;
 
     SrsConfDirective* conf = root->get("threads");
     if (!conf) {

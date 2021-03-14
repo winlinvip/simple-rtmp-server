@@ -53,6 +53,11 @@ private:
     // Async file writer.
     SrsAsyncFileWriter* writer_;
 private:
+    // The interval to flush from coroutine-queue to thread-queue.
+    srs_utime_t interval_;
+    // Last flush coroutine-queue time, to calculate the timeout.
+    srs_utime_t last_flush_time_;
+private:
     // Defined in SrsLogLevel.
     SrsLogLevel level;
     // Whether log to file tank

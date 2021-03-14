@@ -33,6 +33,13 @@
 
 using namespace std;
 
+#include <srs_protocol_kbps.hpp>
+
+SrsPps* _srs_thread_sync_10us = new SrsPps();
+SrsPps* _srs_thread_sync_100us = new SrsPps();
+SrsPps* _srs_thread_sync_1000us = new SrsPps();
+SrsPps* _srs_thread_sync_plus = new SrsPps();
+
 SrsThreadMutex::SrsThreadMutex()
 {
     // https://man7.org/linux/man-pages/man3/pthread_mutexattr_init.3.html
@@ -171,9 +178,19 @@ srs_error_t SrsThreadPool::run()
     while (true) {
         sleep(interval_ / SRS_UTIME_SECONDS);
 
+        static char buf[128];
         string async_logs = _srs_async_log->description();
-        srs_trace("Thread #%d(%s): cycle threads=%d%s", entry_->num, entry_->label.c_str(), (int)threads_.size(),
-            async_logs.c_str());
+
+        string sync_desc;
+        _srs_thread_sync_10us->update(); _srs_thread_sync_100us->update();
+        _srs_thread_sync_1000us->update(); _srs_thread_sync_plus->update();
+        if (_srs_thread_sync_10us->r10s() || _srs_thread_sync_100us->r10s() || _srs_thread_sync_1000us->r10s() || _srs_thread_sync_plus->r10s()) {
+            snprintf(buf, sizeof(buf), ", sync=%d,%d,%d,%d", _srs_thread_sync_10us->r10s(), _srs_thread_sync_100us->r10s(), _srs_thread_sync_1000us->r10s(), _srs_thread_sync_plus->r10s());
+            sync_desc = buf;
+        }
+
+        srs_trace("Thread: cycle threads=%d%s%s", (int)threads_.size(),
+            async_logs.c_str(), sync_desc.c_str());
     }
 
     return err;
@@ -201,14 +218,12 @@ void* SrsThreadPool::start(void* arg)
 
 SrsThreadPool* _srs_thread_pool = new SrsThreadPool();
 
-SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p, srs_utime_t interval)
+SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
 {
     filename_ = p;
     writer_ = new SrsFileWriter();
     queue_ = new SrsThreadQueue<SrsSharedPtrMessage>();
     co_queue_ = new SrsCoroutineQueue<SrsSharedPtrMessage>();
-    interval_ = interval;
-    last_flush_time_ = srs_get_system_time();
 }
 
 // TODO: FIXME: Before free the writer, we must remove it from the manager.
@@ -251,15 +266,6 @@ srs_error_t SrsAsyncFileWriter::write(void* buf, size_t count, ssize_t* pnwrite)
 
     co_queue_->push_back(msg);
 
-    // Whether flush to thread-queue.
-    if (srs_get_system_time() - last_flush_time_ >= interval_) {
-        last_flush_time_ = srs_get_system_time();
-
-        vector<SrsSharedPtrMessage*> flying;
-        co_queue_->swap(flying);
-        queue_->push_back(flying);
-    }
-
     if (pnwrite) {
         *pnwrite = count;
     }
@@ -285,6 +291,28 @@ srs_error_t SrsAsyncFileWriter::writev(const iovec* iov, int iovcnt, ssize_t* pn
     }
 
     return err;
+}
+
+void SrsAsyncFileWriter::flush_co_queue()
+{
+    srs_utime_t now = srs_update_system_time();
+
+    if (true) {
+        vector<SrsSharedPtrMessage*> flying;
+        co_queue_->swap(flying);
+        queue_->push_back(flying);
+    }
+
+    srs_utime_t elapsed = srs_update_system_time() - now;
+    if (elapsed <= 10) {
+        ++_srs_thread_sync_10us->sugar;
+    } else if (elapsed <= 100) {
+        ++_srs_thread_sync_100us->sugar;
+    } else if (elapsed <= 1000) {
+        ++_srs_thread_sync_1000us->sugar;
+    } else {
+        ++_srs_thread_sync_plus->sugar;
+    }
 }
 
 srs_error_t SrsAsyncFileWriter::flush()
@@ -362,7 +390,7 @@ srs_error_t SrsAsyncLogManager::create_writer(std::string filename, SrsAsyncFile
 {
     srs_error_t err = srs_success;
 
-    SrsAsyncFileWriter* writer = new SrsAsyncFileWriter(filename, interval_);
+    SrsAsyncFileWriter* writer = new SrsAsyncFileWriter(filename);
     writers_.push_back(writer);
 
     if ((err = writer->open()) != srs_success) {
@@ -404,7 +432,7 @@ std::string SrsAsyncLogManager::description()
     }
 
     static char buf[128];
-    snprintf(buf, sizeof(buf), ", files=%d, queue=%d/%d, coq=%d/%d",
+    snprintf(buf, sizeof(buf), ", logs=%d/%d/%d/%d/%d",
         (int)writers_.size(), nn_logs, max_logs, nn_co_logs, max_co_logs);
 
     return buf;

@@ -201,14 +201,10 @@ private:
     // The thread-queue, to flush to disk by dedicated thread.
     SrsThreadQueue<SrsSharedPtrMessage>* queue_;
 private:
-    // The interval to flush from coroutine-queue to thread-queue.
-    srs_utime_t interval_;
-    // Last flush coroutine-queue time, to calculate the timeout.
-    srs_utime_t last_flush_time_;
     // The coroutine-queue, to avoid requires lock for each log.
     SrsCoroutineQueue<SrsSharedPtrMessage>* co_queue_;
 private:
-    SrsAsyncFileWriter(std::string p, srs_utime_t interval);
+    SrsAsyncFileWriter(std::string p);
     virtual ~SrsAsyncFileWriter();
 public:
     // Open file writer, in truncate mode.
@@ -222,7 +218,9 @@ public:
     virtual srs_error_t write(void* buf, size_t count, ssize_t* pnwrite);
     virtual srs_error_t writev(const iovec* iov, int iovcnt, ssize_t* pnwrite);
 public:
-    // Flush by other thread.
+    // Flush coroutine-queue to thread-queue, avoid requiring lock for each message.
+    void flush_co_queue();
+    // Flush thread-queue to disk, generally by dedicated thread.
     srs_error_t flush();
 };
 
@@ -233,8 +231,6 @@ class SrsAsyncLogManager
 private:
     // The async flush interval.
     srs_utime_t interval_;
-    // The number of logs to flush from coroutine-queue to thread-queue.
-    int flush_co_queue_;
 private:
     // The async reopen event.
     bool reopen_;
