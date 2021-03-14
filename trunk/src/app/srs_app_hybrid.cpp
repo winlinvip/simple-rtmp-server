@@ -207,6 +207,7 @@ srs_error_t SrsHybridServer::run()
         }
     }
 
+    // TODO: FIXME: Should run the signal manager and directly quit.
     // Wait for all server to quit.
     srs_usleep(SRS_UTIME_NO_TIMEOUT);
 

@@ -92,6 +92,7 @@ SrsThreadEntry::SrsThreadEntry()
 
 SrsThreadEntry::~SrsThreadEntry()
 {
+    // TODO: FIXME: Should dispose err and trd.
 }
 
 SrsThreadPool::SrsThreadPool()
@@ -117,7 +118,6 @@ SrsThreadPool::~SrsThreadPool()
     srs_freep(lock_);
 }
 
-// @remark Note that we should never write logs, because log is not ready not.
 srs_error_t SrsThreadPool::initialize()
 {
     srs_error_t err = srs_success;
@@ -172,12 +172,33 @@ srs_error_t SrsThreadPool::run()
 {
     srs_error_t err = srs_success;
 
-    // Write the init log here.
-    srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
+    bool print_init_log = true;
 
     while (true) {
-        sleep(interval_ / SRS_UTIME_SECONDS);
+        // Check the threads status fastly.
+        int loops = (int)(interval_ / SRS_UTIME_SECONDS);
+        for (int i = 0; i < loops; i++) {
+            if (true) {
+                SrsThreadLocker(lock_);
+                for (int i = 0; i < (int)threads_.size(); i++) {
+                    SrsThreadEntry* entry = threads_.at(i);
+                    if (entry->err != srs_success) {
+                        err = srs_error_wrap(entry->err, "thread #%d(%s)", entry->num, entry->label.c_str());
+                        return srs_error_copy(err);
+                    }
+                }
+            }
 
+            sleep(1);
+
+            // Flush the system previous logs by this log.
+            if (i > 0 && print_init_log) {
+                print_init_log = false;
+                srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
+            }
+        }
+
+        // In normal state, gather status and log it.
         static char buf[128];
         string async_logs = _srs_async_log->description();
 
@@ -198,7 +219,7 @@ srs_error_t SrsThreadPool::run()
 
 void SrsThreadPool::stop()
 {
-    // TODO: FIXME: Implements it.
+    // TODO: FIXME: Should notify other threads to do cleanup and quit.
 }
 
 void* SrsThreadPool::start(void* arg)
@@ -216,6 +237,7 @@ void* SrsThreadPool::start(void* arg)
     return NULL;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 SrsThreadPool* _srs_thread_pool = new SrsThreadPool();
 
 SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
@@ -297,6 +319,7 @@ void SrsAsyncFileWriter::flush_co_queue()
 {
     srs_utime_t now = srs_update_system_time();
 
+    // The thread queue is thread-safe, so we do not need a lock.
     if (true) {
         vector<SrsSharedPtrMessage*> flying;
         co_queue_->swap(flying);
@@ -373,17 +396,10 @@ srs_error_t SrsAsyncLogManager::initialize()
 }
 
 // @remark Now, log is ready, and we can print logs.
-srs_error_t SrsAsyncLogManager::run()
+srs_error_t SrsAsyncLogManager::start(void* arg)
 {
-    srs_error_t err =  srs_success;
-
-    if ((err = _srs_thread_pool->execute("log", SrsAsyncLogManager::start, this)) != srs_success) {
-        return srs_error_wrap(err, "run async log");
-    }
-
-    srs_trace("AsyncLogs: Init flush_interval=%dms", srsu2msi(interval_));
-
-    return err;
+    SrsAsyncLogManager* log = (SrsAsyncLogManager*)arg;
+    return log->do_start();
 }
 
 srs_error_t SrsAsyncLogManager::create_writer(std::string filename, SrsAsyncFileWriter** ppwriter)
@@ -391,7 +407,11 @@ srs_error_t SrsAsyncLogManager::create_writer(std::string filename, SrsAsyncFile
     srs_error_t err = srs_success;
 
     SrsAsyncFileWriter* writer = new SrsAsyncFileWriter(filename);
-    writers_.push_back(writer);
+
+    if (true) {
+        SrsThreadLocker(lock_);
+        writers_.push_back(writer);
+    }
 
     if ((err = writer->open()) != srs_success) {
         return srs_error_wrap(err, "open file %s fail", filename.c_str());
@@ -436,12 +456,6 @@ std::string SrsAsyncLogManager::description()
         (int)writers_.size(), nn_logs, max_logs, nn_co_logs, max_co_logs);
 
     return buf;
-}
-
-srs_error_t SrsAsyncLogManager::start(void* arg)
-{
-    SrsAsyncLogManager* log = (SrsAsyncLogManager*)arg;
-    return log->do_start();
 }
 
 srs_error_t SrsAsyncLogManager::do_start()
@@ -489,4 +503,5 @@ srs_error_t SrsAsyncLogManager::do_start()
     return err;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 SrsAsyncLogManager* _srs_async_log = new SrsAsyncLogManager();

@@ -1113,11 +1113,12 @@ srs_error_t SrsServer::cycle()
     }
 
     srs_trace("srs terminated");
-    
+
     // for valgrind to detect.
     srs_freep(_srs_config);
     srs_freep(_srs_log);
 
+    // TODO: FIXME: Should return to exit the thread, and quit by thread pool manager.
     exit(0);
 
     return err;

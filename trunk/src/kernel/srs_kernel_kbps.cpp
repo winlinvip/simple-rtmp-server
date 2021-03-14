@@ -129,5 +129,6 @@ srs_utime_t SrsWallClock::now()
     return srs_get_system_time();
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 SrsWallClock* _srs_clock = new SrsWallClock();
 

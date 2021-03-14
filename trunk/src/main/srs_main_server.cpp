@@ -70,9 +70,12 @@ srs_error_t run_in_thread_pool();
 void show_macro_features();
 
 // @global log and context.
+// TODO: FIXME: It should be thread-local or thread-safe.
 ISrsLog* _srs_log = new SrsFileLog();
+// TODO: FIXME: It should be thread-local or thread-safe.
 ISrsContext* _srs_context = new SrsThreadContext();
 // @global config object for app module.
+// TODO: FIXME: It should be thread-local or thread-safe.
 SrsConfig* _srs_config = new SrsConfig();
 
 // @global version of srs, which can grep keyword "XCORE"
@@ -226,8 +229,12 @@ int main(int argc, char** argv) {
 
     srs_error_t err = do_main(argc, argv);
 
+    // Because we are exiting, and it's impossible to notify the async log thread
+    // to write the error log, so we print to stderr instead.
+    // TODO: FIXME: Should we flush the async log cache?
     if (err != srs_success) {
-        srs_error("Failed, %s", srs_error_desc(err).c_str());
+        fprintf(stderr, "Failed, ts=%" PRId64 ", err is %s\n", srs_update_system_time(),
+            srs_error_desc(err).c_str());
     }
     
     int ret = srs_error_code(err);
@@ -476,18 +483,19 @@ srs_error_t run_in_thread_pool()
 
     // After all init(log, async log manager, thread pool), now we can start to
     // run the log manager thread.
-    if ((err = _srs_async_log->run()) != srs_success) {
-        return srs_error_wrap(err, "run async log");
+    if ((err = _srs_thread_pool->execute("log", SrsAsyncLogManager::start, _srs_async_log)) != srs_success) {
+        return srs_error_wrap(err, "start async log thread");
     }
 
     // Start the service worker thread, for RTMP and RTC server, etc.
     if ((err = _srs_thread_pool->execute("hybrid", run_hybrid_server, NULL)) != srs_success) {
-        return srs_error_wrap(err, "run hybrid server");
+        return srs_error_wrap(err, "start hybrid server thread");
     }
 
     return _srs_thread_pool->run();
 }
 
+// TODO: FIXME: Extract to hybrid server.
 srs_error_t run_hybrid_server(void* arg)
 {
     srs_error_t err = srs_success;
@@ -504,6 +512,7 @@ srs_error_t run_hybrid_server(void* arg)
 #endif
 
     // Do some system initialize.
+    // TODO: FIXME: If fail, for example, acquire pid fail, should exit.
     if ((err = _srs_hybrid->initialize()) != srs_success) {
         return srs_error_wrap(err, "hybrid initialize");
     }

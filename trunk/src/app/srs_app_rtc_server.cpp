@@ -766,5 +766,6 @@ void RtcServerAdapter::stop()
 {
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 SrsResourceManager* _srs_rtc_manager = new SrsResourceManager("RTC", true);
 

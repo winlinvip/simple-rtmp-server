@@ -315,6 +315,7 @@ SrsRtcStream* SrsRtcStreamManager::fetch(SrsRequest* r)
     return source;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 SrsRtcStreamManager* _srs_rtc_sources = new SrsRtcStreamManager();
 
 ISrsRtcPublishStream::ISrsRtcPublishStream()
