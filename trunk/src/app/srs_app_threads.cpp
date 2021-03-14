@@ -128,7 +128,9 @@ srs_error_t SrsThreadPool::initialize()
     }
 
     interval_ = _srs_config->get_threads_interval();
-    srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
+    bool async_srtp = _srs_config->get_threads_async_srtp();
+    srs_trace("Thread #%d(%s): init interval=%dms, async_srtp=%d",
+        entry_->num, entry_->label.c_str(), srsu2msi(interval_), async_srtp);
 
     return err;
 }
@@ -481,3 +483,31 @@ srs_error_t SrsAsyncLogManager::do_start()
 
 // TODO: FIXME: It should be thread-local or thread-safe.
 SrsAsyncLogManager* _srs_async_log = new SrsAsyncLogManager();
+
+SrsAsyncSRTP::SrsAsyncSRTP()
+{
+}
+
+SrsAsyncSRTP::~SrsAsyncSRTP()
+{
+}
+
+srs_error_t SrsAsyncSRTP::protect_rtp(void* packet, int* nb_cipher)
+{
+    return SrsSRTP::protect_rtp(packet, nb_cipher);
+}
+
+srs_error_t SrsAsyncSRTP::protect_rtcp(void* packet, int* nb_cipher)
+{
+    return SrsSRTP::protect_rtcp(packet, nb_cipher);
+}
+
+srs_error_t SrsAsyncSRTP::unprotect_rtp(void* packet, int* nb_plaintext)
+{
+    return SrsSRTP::unprotect_rtp(packet, nb_plaintext);
+}
+
+srs_error_t SrsAsyncSRTP::unprotect_rtcp(void* packet, int* nb_plaintext)
+{
+    return SrsSRTP::unprotect_rtcp(packet, nb_plaintext);
+}

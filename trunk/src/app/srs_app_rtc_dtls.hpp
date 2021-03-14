@@ -231,14 +231,14 @@ public:
 
 class SrsSRTP
 {
-private:
+protected:
     srtp_t recv_ctx_;
     srtp_t send_ctx_;
 public:
     SrsSRTP();
     virtual ~SrsSRTP();
 public:
-    // Intialize srtp context with recv_key and send_key.
+    // Initialize srtp context with recv_key and send_key.
     srs_error_t initialize(std::string recv_key, std::string send_key);
 public:
     srs_error_t protect_rtp(void* packet, int* nb_cipher);

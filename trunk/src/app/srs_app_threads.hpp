@@ -28,6 +28,7 @@
 
 #include <srs_kernel_file.hpp>
 #include <srs_kernel_flv.hpp>
+#include <srs_app_rtc_dtls.hpp>
 
 #include <pthread.h>
 
@@ -253,5 +254,18 @@ private:
 
 // The global async log manager.
 extern SrsAsyncLogManager* _srs_async_log;
+
+// The async SRTP codec.
+class SrsAsyncSRTP : public SrsSRTP
+{
+public:
+    SrsAsyncSRTP();
+    virtual ~SrsAsyncSRTP();
+public:
+    srs_error_t protect_rtp(void* packet, int* nb_cipher);
+    srs_error_t protect_rtcp(void* packet, int* nb_cipher);
+    srs_error_t unprotect_rtp(void* packet, int* nb_plaintext);
+    srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext);
+};
 
 #endif

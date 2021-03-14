@@ -478,6 +478,7 @@ public:
 // Thread pool section.
 public:
     virtual srs_utime_t get_threads_interval();
+    virtual bool get_threads_async_srtp();
 // stream_caster section
 public:
     // Get all stream_caster in config file.

@@ -4127,6 +4127,23 @@ srs_utime_t SrsConfig::get_threads_interval()
     return v * SRS_UTIME_SECONDS;
 }
 
+bool SrsConfig::get_threads_async_srtp()
+{
+    static bool DEFAULT = false;
+
+    SrsConfDirective* conf = root->get("threads");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("async_srtp");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
 vector<SrsConfDirective*> SrsConfig::get_stream_casters()
 {
     srs_assert(root);

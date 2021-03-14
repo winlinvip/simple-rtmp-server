@@ -57,6 +57,7 @@ using namespace std;
 #include <srs_app_rtc_server.hpp>
 #include <srs_app_rtc_source.hpp>
 #include <srs_protocol_utility.hpp>
+#include <srs_app_threads.hpp>
 
 #include <srs_protocol_kbps.hpp>
 
@@ -93,7 +94,13 @@ SrsSecurityTransport::SrsSecurityTransport(SrsRtcConnection* s)
     session_ = s;
 
     dtls_ = new SrsDtls((ISrsDtlsCallback*)this);
-    srtp_ = new SrsSRTP();
+
+    bool async_srtp = _srs_config->get_threads_async_srtp();
+    if (!async_srtp) {
+        srtp_ = new SrsSRTP();
+    } else {
+        srtp_ = new SrsAsyncSRTP();
+    }
 
     handshake_done = false;
 }
