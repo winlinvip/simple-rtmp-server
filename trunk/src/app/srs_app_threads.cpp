@@ -35,10 +35,10 @@ using namespace std;
 
 #include <srs_protocol_kbps.hpp>
 
-SrsPps* _srs_thread_sync_10us = new SrsPps();
-SrsPps* _srs_thread_sync_100us = new SrsPps();
-SrsPps* _srs_thread_sync_1000us = new SrsPps();
-SrsPps* _srs_thread_sync_plus = new SrsPps();
+extern SrsPps* _srs_thread_sync_10us;
+extern SrsPps* _srs_thread_sync_100us;
+extern SrsPps* _srs_thread_sync_1000us;
+extern SrsPps* _srs_thread_sync_plus;
 
 SrsThreadMutex::SrsThreadMutex()
 {
@@ -128,6 +128,7 @@ srs_error_t SrsThreadPool::initialize()
     }
 
     interval_ = _srs_config->get_threads_interval();
+    srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
 
     return err;
 }
@@ -172,8 +173,6 @@ srs_error_t SrsThreadPool::run()
 {
     srs_error_t err = srs_success;
 
-    bool print_init_log = true;
-
     while (true) {
         // Check the threads status fastly.
         int loops = (int)(interval_ / SRS_UTIME_SECONDS);
@@ -190,12 +189,6 @@ srs_error_t SrsThreadPool::run()
             }
 
             sleep(1);
-
-            // Flush the system previous logs by this log.
-            if (i > 0 && print_init_log) {
-                print_init_log = false;
-                srs_trace("Thread #%d(%s): init interval=%dms", entry_->num, entry_->label.c_str(), srsu2msi(interval_));
-            }
         }
 
         // In normal state, gather status and log it.
@@ -245,7 +238,6 @@ SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
     filename_ = p;
     writer_ = new SrsFileWriter();
     queue_ = new SrsThreadQueue<SrsSharedPtrMessage>();
-    co_queue_ = new SrsCoroutineQueue<SrsSharedPtrMessage>();
 }
 
 // TODO: FIXME: Before free the writer, we must remove it from the manager.
@@ -254,7 +246,6 @@ SrsAsyncFileWriter::~SrsAsyncFileWriter()
     // TODO: FIXME: Should we flush dirty logs?
     srs_freep(writer_);
     srs_freep(queue_);
-    srs_freep(co_queue_);
 }
 
 srs_error_t SrsAsyncFileWriter::open()
@@ -286,7 +277,7 @@ srs_error_t SrsAsyncFileWriter::write(void* buf, size_t count, ssize_t* pnwrite)
     SrsSharedPtrMessage* msg = new SrsSharedPtrMessage();
     msg->wrap(cp, count);
 
-    co_queue_->push_back(msg);
+    queue_->push_back(msg);
 
     if (pnwrite) {
         *pnwrite = count;
@@ -313,29 +304,6 @@ srs_error_t SrsAsyncFileWriter::writev(const iovec* iov, int iovcnt, ssize_t* pn
     }
 
     return err;
-}
-
-void SrsAsyncFileWriter::flush_co_queue()
-{
-    srs_utime_t now = srs_update_system_time();
-
-    // The thread queue is thread-safe, so we do not need a lock.
-    if (true) {
-        vector<SrsSharedPtrMessage*> flying;
-        co_queue_->swap(flying);
-        queue_->push_back(flying);
-    }
-
-    srs_utime_t elapsed = srs_update_system_time() - now;
-    if (elapsed <= 10) {
-        ++_srs_thread_sync_10us->sugar;
-    } else if (elapsed <= 100) {
-        ++_srs_thread_sync_100us->sugar;
-    } else if (elapsed <= 1000) {
-        ++_srs_thread_sync_1000us->sugar;
-    } else {
-        ++_srs_thread_sync_plus->sugar;
-    }
 }
 
 srs_error_t SrsAsyncFileWriter::flush()
@@ -441,19 +409,8 @@ std::string SrsAsyncLogManager::description()
         max_logs = srs_max(max_logs, nn);
     }
 
-    int nn_co_logs = 0;
-    int max_co_logs = 0;
-    for (int i = 0; i < (int)writers_.size(); i++) {
-        SrsAsyncFileWriter* writer = writers_.at(i);
-
-        int nn = (int)writer->co_queue_->size();
-        nn_co_logs += nn;
-        max_co_logs = srs_max(max_co_logs, nn);
-    }
-
     static char buf[128];
-    snprintf(buf, sizeof(buf), ", logs=%d/%d/%d/%d/%d",
-        (int)writers_.size(), nn_logs, max_logs, nn_co_logs, max_co_logs);
+    snprintf(buf, sizeof(buf), ", logs=%d/%d/%d", (int)writers_.size(), nn_logs, max_logs);
 
     return buf;
 }

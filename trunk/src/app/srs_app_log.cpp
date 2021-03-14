@@ -38,6 +38,13 @@
 #include <srs_kernel_utility.hpp>
 #include <srs_app_threads.hpp>
 
+#include <srs_protocol_kbps.hpp>
+
+SrsPps* _srs_thread_sync_10us = new SrsPps();
+SrsPps* _srs_thread_sync_100us = new SrsPps();
+SrsPps* _srs_thread_sync_1000us = new SrsPps();
+SrsPps* _srs_thread_sync_plus = new SrsPps();
+
 // the max size of a line of log.
 #define LOG_MAX_SIZE 8192
 
@@ -54,9 +61,6 @@ SrsFileLog::SrsFileLog()
 
     log_data = new char[LOG_MAX_SIZE];
     writer_ = NULL;
-
-    last_flush_time_ = srs_get_system_time();
-    interval_ = 0;
 }
 
 SrsFileLog::~SrsFileLog()
@@ -74,7 +78,6 @@ srs_error_t SrsFileLog::initialize()
         filename_ = _srs_config->get_log_file();
         level = srs_get_log_level(_srs_config->get_log_level());
         utc = _srs_config->get_utc_time();
-        interval_ = _srs_config->srs_log_flush_interval();
     }
 
     if (!log_to_file_tank) {
@@ -231,17 +234,25 @@ void SrsFileLog::write_log(char *str_log, int size, int level)
         
         return;
     }
-    
+
+    // It's ok to use cache, because it has been updated in generating log header.
+    srs_utime_t now = srs_get_system_time();
+
     // write log to file.
     if ((err = writer_->write(str_log, size, NULL)) != srs_success) {
         srs_error_reset(err); // Ignore any error for log writing.
     }
 
-    // Whether flush to thread-queue.
-    srs_utime_t diff = srs_get_system_time() - last_flush_time_;
-    if (diff >= interval_) {
-        last_flush_time_ = srs_get_system_time();
-        writer_->flush_co_queue();
+    // Stat the sync wait of locks.
+    srs_utime_t elapsed = srs_update_system_time() - now;
+    if (elapsed <= 10) {
+        ++_srs_thread_sync_10us->sugar;
+    } else if (elapsed <= 100) {
+        ++_srs_thread_sync_100us->sugar;
+    } else if (elapsed <= 1000) {
+        ++_srs_thread_sync_1000us->sugar;
+    } else {
+        ++_srs_thread_sync_plus->sugar;
     }
 }
 

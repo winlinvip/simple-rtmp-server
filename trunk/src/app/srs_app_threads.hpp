@@ -190,8 +190,7 @@ public:
     }
 };
 
-// Async file writer, it's not thread safe. It assume that each thread has its dedicate object,
-// for example, the log object should be thread_local.
+// Async file writer, it's thread safe.
 class SrsAsyncFileWriter : public ISrsWriter
 {
     friend class SrsAsyncLogManager;
@@ -201,17 +200,6 @@ private:
 private:
     // The thread-queue, to flush to disk by dedicated thread.
     SrsThreadQueue<SrsSharedPtrMessage>* queue_;
-private:
-    // The coroutine-queue, to avoid requires lock for each log.
-    // @remark Note that if multiple thread write to the same log file, the log is nor ordered
-    // by time, because each thread has this coroutine-queue and flush as a batch of logs to
-    // thread-queue:
-    //      thread #1, flush 10 logs to thread-queue, [10:10:00 ~ 10:11:00]
-    //      thread #2, flush 100 logs to thread-queue, [10:09:00 ~ 10:12:00]
-    // Finally, the logs flush to disk as:
-    //      [10:10:00 ~ 10:11:00], 10 logs.
-    //      [10:09:00 ~ 10:12:00], 100 logs.
-    SrsCoroutineQueue<SrsSharedPtrMessage>* co_queue_;
 private:
     SrsAsyncFileWriter(std::string p);
     virtual ~SrsAsyncFileWriter();
@@ -227,8 +215,6 @@ public:
     virtual srs_error_t write(void* buf, size_t count, ssize_t* pnwrite);
     virtual srs_error_t writev(const iovec* iov, int iovcnt, ssize_t* pnwrite);
 public:
-    // Flush coroutine-queue to thread-queue, avoid requiring lock for each message.
-    void flush_co_queue();
     // Flush thread-queue to disk, generally by dedicated thread.
     srs_error_t flush();
 };
