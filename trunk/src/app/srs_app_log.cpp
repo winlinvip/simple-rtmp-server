@@ -38,13 +38,6 @@
 #include <srs_kernel_utility.hpp>
 #include <srs_app_threads.hpp>
 
-#include <srs_protocol_kbps.hpp>
-
-SrsPps* _srs_thread_sync_10us = new SrsPps();
-SrsPps* _srs_thread_sync_100us = new SrsPps();
-SrsPps* _srs_thread_sync_1000us = new SrsPps();
-SrsPps* _srs_thread_sync_plus = new SrsPps();
-
 // the max size of a line of log.
 #define LOG_MAX_SIZE 8192
 
@@ -235,24 +228,9 @@ void SrsFileLog::write_log(char *str_log, int size, int level)
         return;
     }
 
-    // It's ok to use cache, because it has been updated in generating log header.
-    srs_utime_t now = srs_get_system_time();
-
     // write log to file.
     if ((err = writer_->write(str_log, size, NULL)) != srs_success) {
         srs_error_reset(err); // Ignore any error for log writing.
-    }
-
-    // Stat the sync wait of locks.
-    srs_utime_t elapsed = srs_update_system_time() - now;
-    if (elapsed <= 10) {
-        ++_srs_thread_sync_10us->sugar;
-    } else if (elapsed <= 100) {
-        ++_srs_thread_sync_100us->sugar;
-    } else if (elapsed <= 1000) {
-        ++_srs_thread_sync_1000us->sugar;
-    } else {
-        ++_srs_thread_sync_plus->sugar;
     }
 }
 

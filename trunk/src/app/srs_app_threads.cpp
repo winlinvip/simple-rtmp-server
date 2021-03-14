@@ -35,10 +35,10 @@ using namespace std;
 
 #include <srs_protocol_kbps.hpp>
 
-extern SrsPps* _srs_thread_sync_10us;
-extern SrsPps* _srs_thread_sync_100us;
-extern SrsPps* _srs_thread_sync_1000us;
-extern SrsPps* _srs_thread_sync_plus;
+SrsPps* _srs_thread_sync_10us = new SrsPps();
+SrsPps* _srs_thread_sync_100us = new SrsPps();
+SrsPps* _srs_thread_sync_1000us = new SrsPps();
+SrsPps* _srs_thread_sync_plus = new SrsPps();
 
 SrsThreadMutex::SrsThreadMutex()
 {
@@ -310,9 +310,28 @@ srs_error_t SrsAsyncFileWriter::flush()
 {
     srs_error_t err = srs_success;
 
-    vector<SrsSharedPtrMessage*> flying;
-    queue_->swap(flying);
+    // The time to wait here, is the time to wait there, because they wait for the same lock
+    // at queue to push_back or swap all messages.
+    srs_utime_t now = srs_update_system_time();
 
+    vector<SrsSharedPtrMessage*> flying;
+    if (true) {
+        queue_->swap(flying);
+    }
+
+    // Stat the sync wait of locks.
+    srs_utime_t elapsed = srs_update_system_time() - now;
+    if (elapsed <= 10) {
+        ++_srs_thread_sync_10us->sugar;
+    } else if (elapsed <= 100) {
+        ++_srs_thread_sync_100us->sugar;
+    } else if (elapsed <= 1000) {
+        ++_srs_thread_sync_1000us->sugar;
+    } else {
+        ++_srs_thread_sync_plus->sugar;
+    }
+
+    // Flush the flying messages to disk.
     for (int i = 0; i < (int)flying.size(); i++) {
         SrsSharedPtrMessage* msg = flying.at(i);
 
