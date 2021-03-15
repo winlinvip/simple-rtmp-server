@@ -492,6 +492,11 @@ srs_error_t run_in_thread_pool()
         return srs_error_wrap(err, "start async srtp thread");
     }
 
+    // Start the async RECV worker thread, to recv UDP packets.
+    if ((err = _srs_thread_pool->execute("recv", SrsAsyncRecvManager::start, _srs_async_recv)) != srs_success) {
+        return srs_error_wrap(err, "start async recv thread");
+    }
+
     // Start the service worker thread, for RTMP and RTC server, etc.
     if ((err = _srs_thread_pool->execute("hybrid", run_hybrid_server, NULL)) != srs_success) {
         return srs_error_wrap(err, "start hybrid server thread");

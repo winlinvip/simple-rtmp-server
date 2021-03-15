@@ -30,6 +30,7 @@
 #include <srs_kernel_flv.hpp>
 #include <srs_app_rtc_dtls.hpp>
 #include <srs_app_rtc_conn.hpp>
+#include <srs_app_listener.hpp>
 
 #include <pthread.h>
 
@@ -335,5 +336,43 @@ public:
 
 // The global async SRTP manager.
 extern SrsAsyncSRTPManager* _srs_async_srtp;
+
+// A thread-safe UDP listener.
+// TODO: FIXME: Use st_recvfrom to recv if thread-safe ST is ok.
+class SrsThreadUdpListener
+{
+public:
+    SrsUdpMuxSocket* skt_;
+public:
+    SrsThreadUdpListener(srs_netfd_t fd);
+    virtual ~SrsThreadUdpListener();
+};
+
+// The async RECV manager, to recv UDP packets.
+class SrsAsyncRecvManager
+{
+private:
+    ISrsUdpMuxHandler* handler_;
+private:
+    SrsThreadQueue<SrsUdpMuxSocket>* packets_;
+private:
+    std::vector<SrsThreadUdpListener*> listeners_;
+    SrsThreadMutex* lock_;
+public:
+    SrsAsyncRecvManager();
+    virtual ~SrsAsyncRecvManager();
+public:
+    void set_handler(ISrsUdpMuxHandler* v);
+    void add_listener(SrsThreadUdpListener* listener);
+    static srs_error_t start(void* arg);
+private:
+    srs_error_t do_start();
+public:
+    // Consume received UDP packets. Must call in worker/service thread.
+    virtual srs_error_t consume();
+};
+
+// The global async RECV manager.
+extern SrsAsyncRecvManager* _srs_async_recv;
 
 #endif

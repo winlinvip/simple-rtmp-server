@@ -646,6 +646,7 @@ void SrsAsyncSRTPManager::remove_task(SrsAsyncSRTPTask* task)
     }
 }
 
+// TODO: FIXME: We could use a coroutine queue, then cook all packet in RTC server timer.
 void SrsAsyncSRTPManager::add_packet(SrsAsyncSRTPPacket* pkt)
 {
     packets_->push_back(pkt);
@@ -661,7 +662,9 @@ srs_error_t SrsAsyncSRTPManager::do_start()
 {
     srs_error_t err = srs_success;
 
+    // TODO: FIXME: Config it?
     srs_utime_t interval = 10 * SRS_UTIME_MILLISECONDS;
+
     while (true) {
         vector<SrsAsyncSRTPPacket*> flying;
         packets_->swap(flying);
@@ -719,3 +722,112 @@ srs_error_t SrsAsyncSRTPManager::consume()
 }
 
 SrsAsyncSRTPManager* _srs_async_srtp = new SrsAsyncSRTPManager();
+
+SrsThreadUdpListener::SrsThreadUdpListener(srs_netfd_t fd)
+{
+    skt_ = new SrsUdpMuxSocket(fd);
+}
+
+SrsThreadUdpListener::~SrsThreadUdpListener()
+{
+}
+
+SrsAsyncRecvManager::SrsAsyncRecvManager()
+{
+    lock_ = new SrsThreadMutex();
+    packets_ = new SrsThreadQueue<SrsUdpMuxSocket>();
+    handler_ = NULL;
+}
+
+// TODO: FIXME: We should stop the thread first, then free the manager.
+SrsAsyncRecvManager::~SrsAsyncRecvManager()
+{
+    srs_freep(lock_);
+    srs_freep(packets_);
+
+    vector<SrsThreadUdpListener*>::iterator it;
+    for (it = listeners_.begin(); it != listeners_.end(); ++it) {
+        SrsThreadUdpListener* listener = *it;
+        srs_freep(listener);
+    }
+}
+
+void SrsAsyncRecvManager::set_handler(ISrsUdpMuxHandler* v)
+{
+    handler_ = v;
+}
+
+void SrsAsyncRecvManager::add_listener(SrsThreadUdpListener* listener)
+{
+    SrsThreadLocker(lock_);
+    listeners_.push_back(listener);
+}
+
+srs_error_t SrsAsyncRecvManager::start(void* arg)
+{
+    SrsAsyncRecvManager* recv = (SrsAsyncRecvManager*)arg;
+    return recv->do_start();
+}
+
+srs_error_t SrsAsyncRecvManager::do_start()
+{
+    srs_error_t err = srs_success;
+
+    // TODO: FIXME: Config it?
+    srs_utime_t interval = 10 * SRS_UTIME_MILLISECONDS;
+
+    while (true) {
+        vector<SrsThreadUdpListener*> listeners;
+        if (true) {
+            SrsThreadLocker(lock_);
+            listeners = listeners_;
+        }
+
+        bool got_packet = false;
+        for (int i = 0; i < (int)listeners.size(); i++) {
+            SrsThreadUdpListener* listener = listeners.at(i);
+
+            // TODO: FIXME: Use st_recvfrom to recv if thread-safe ST is ok.
+            int nread = listener->skt_->raw_recvfrom();
+            if (nread > 0) {
+                got_packet = true;
+                packets_->push_back(listener->skt_->copy());
+            }
+        }
+
+        // If got packets, maybe more packets in queue.
+        if (got_packet) {
+            continue;
+        }
+
+        // TODO: FIXME: Maybe we should use cond wait?
+        timespec tv = {0};
+        tv.tv_sec = interval / SRS_UTIME_SECONDS;
+        tv.tv_nsec = (interval % SRS_UTIME_SECONDS) * 1000;
+        nanosleep(&tv, NULL);
+    }
+
+    return err;
+}
+
+srs_error_t SrsAsyncRecvManager::consume()
+{
+    srs_error_t err = srs_success;
+
+    vector<SrsUdpMuxSocket*> flying;
+    packets_->swap(flying);
+
+    for (int i = 0; i < (int)flying.size(); i++) {
+        SrsUdpMuxSocket* pkt = flying.at(i);
+
+        if (handler_ && (err = handler_->on_udp_packet(pkt)) != srs_success) {
+            srs_error_reset(err); // Ignore any error.
+        }
+
+        srs_freep(pkt);
+    }
+
+    return err;
+}
+
+SrsAsyncRecvManager* _srs_async_recv = new SrsAsyncRecvManager();

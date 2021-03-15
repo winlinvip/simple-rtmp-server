@@ -4144,6 +4144,23 @@ bool SrsConfig::get_threads_async_srtp()
     return SRS_CONF_PERFER_FALSE(conf->arg0());
 }
 
+bool SrsConfig::get_threads_async_recv()
+{
+    static bool DEFAULT = false;
+
+    SrsConfDirective* conf = root->get("threads");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("async_recv");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
 vector<SrsConfDirective*> SrsConfig::get_stream_casters()
 {
     srs_assert(root);
