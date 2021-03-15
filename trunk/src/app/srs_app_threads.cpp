@@ -474,7 +474,7 @@ srs_error_t SrsAsyncLogManager::do_start()
         // this is a system thread, not a coroutine.
         timespec tv = {0};
         tv.tv_sec = interval_ / SRS_UTIME_SECONDS;
-        tv.tv_nsec = (interval_ % SRS_UTIME_MILLISECONDS) * 1000;
+        tv.tv_nsec = (interval_ % SRS_UTIME_SECONDS) * 1000;
         nanosleep(&tv, NULL);
     }
 
@@ -684,7 +684,7 @@ srs_error_t SrsAsyncSRTPManager::do_start()
         // TODO: FIXME: Maybe we should use cond wait?
         timespec tv = {0};
         tv.tv_sec = interval / SRS_UTIME_SECONDS;
-        tv.tv_nsec = (interval % SRS_UTIME_MILLISECONDS) * 1000;
+        tv.tv_nsec = (interval % SRS_UTIME_SECONDS) * 1000;
         nanosleep(&tv, NULL);
     }
 
