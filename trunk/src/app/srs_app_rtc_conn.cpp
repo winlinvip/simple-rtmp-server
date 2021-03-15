@@ -99,7 +99,7 @@ SrsSecurityTransport::SrsSecurityTransport(SrsRtcConnection* s)
     if (!async_srtp) {
         srtp_ = new SrsSRTP();
     } else {
-        srtp_ = new SrsAsyncSRTP();
+        srtp_ = new SrsAsyncSRTP(this);
     }
 
     handshake_done = false;
@@ -196,6 +196,11 @@ srs_error_t SrsSecurityTransport::srtp_initialize()
     }
 
     return err;
+}
+
+srs_error_t SrsSecurityTransport::on_rtp_plaintext(char* plaintext, int size)
+{
+    return session_->on_rtp_plaintext(plaintext, size);
 }
 
 srs_error_t SrsSecurityTransport::protect_rtp(void* packet, int* nb_cipher)
@@ -1190,6 +1195,12 @@ srs_error_t SrsRtcPublishStream::on_rtp(char* data, int nb_data)
         return err;
     }
 
+    // For async SRTP, the nb_plaintext might be zero, which means we do not got the plaintext
+    // right now, and it will callback if get one.
+    if (nb_plaintext == 0) {
+        return err;
+    }
+
     // Handle the plaintext RTP packet.
     if ((err = on_rtp_plaintext(plaintext, nb_plaintext)) != srs_success) {
         // We try to decode the RTP header for more detail error informations.
@@ -2117,6 +2128,19 @@ srs_error_t SrsRtcConnection::on_rtp(char* data, int nb_data)
     srs_assert(publisher);
 
     return publisher->on_rtp(data, nb_data);
+}
+
+srs_error_t SrsRtcConnection::on_rtp_plaintext(char* plaintext, int nb_plaintext)
+{
+    srs_error_t err = srs_success;
+
+    SrsRtcPublishStream* publisher = NULL;
+    if ((err = find_publisher(plaintext, nb_plaintext, &publisher)) != srs_success) {
+        return srs_error_wrap(err, "find");
+    }
+    srs_assert(publisher);
+
+    return publisher->on_rtp_plaintext(plaintext, nb_plaintext);
 }
 
 srs_error_t SrsRtcConnection::find_publisher(char* buf, int size, SrsRtcPublishStream** ppublisher)

@@ -142,6 +142,8 @@ public:
     virtual srs_error_t write_dtls_data(void* data, int size);
 private:
     srs_error_t srtp_initialize();
+public:
+    srs_error_t on_rtp_plaintext(char* plaintext, int size);
 };
 
 // Semi security transport, setup DTLS and SRTP, with SRTP decrypt, without SRTP encrypt.
@@ -326,7 +328,7 @@ private:
     srs_error_t send_rtcp_xr_rrtr();
 public:
     srs_error_t on_rtp(char* buf, int nb_buf);
-private:
+public:
     // @remark We copy the plaintext, user should free it.
     srs_error_t on_rtp_plaintext(char* plaintext, int nb_plaintext);
 private:
@@ -486,6 +488,7 @@ public:
     srs_error_t on_dtls(char* data, int nb_data);
     srs_error_t on_rtp(char* data, int nb_data);
 private:
+    srs_error_t on_rtp_plaintext(char* plaintext, int size);
     // Decode the RTP header from buf, find the publisher by SSRC.
     srs_error_t find_publisher(char* buf, int size, SrsRtcPublishStream** ppublisher);
 public:

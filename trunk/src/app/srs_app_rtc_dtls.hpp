@@ -239,12 +239,12 @@ public:
     virtual ~SrsSRTP();
 public:
     // Initialize srtp context with recv_key and send_key.
-    srs_error_t initialize(std::string recv_key, std::string send_key);
+    virtual srs_error_t initialize(std::string recv_key, std::string send_key);
 public:
-    srs_error_t protect_rtp(void* packet, int* nb_cipher);
-    srs_error_t protect_rtcp(void* packet, int* nb_cipher);
-    srs_error_t unprotect_rtp(void* packet, int* nb_plaintext);
-    srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext);
+    virtual srs_error_t protect_rtp(void* packet, int* nb_cipher);
+    virtual srs_error_t protect_rtcp(void* packet, int* nb_cipher);
+    virtual srs_error_t unprotect_rtp(void* packet, int* nb_plaintext);
+    virtual srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext);
 };
 
 #endif

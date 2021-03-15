@@ -28,6 +28,7 @@ using namespace std;
 #include <srs_kernel_error.hpp>
 #include <srs_kernel_log.hpp>
 #include <srs_kernel_utility.hpp>
+#include <srs_app_threads.hpp>
 
 #include <srs_protocol_kbps.hpp>
 
@@ -258,6 +259,11 @@ srs_error_t SrsClockWallMonitor::on_timer(srs_utime_t interval, srs_utime_t tick
         ++_srs_pps_clock_160ms->sugar;
     } else {
         ++_srs_pps_timer_s->sugar;
+    }
+
+    // Consume the cooked async SRTP packets.
+    if ((err = _srs_async_srtp->consume()) != srs_success) {
+        srs_error_reset(err); // Ignore any error.
     }
 
     return err;

@@ -484,30 +484,238 @@ srs_error_t SrsAsyncLogManager::do_start()
 // TODO: FIXME: It should be thread-local or thread-safe.
 SrsAsyncLogManager* _srs_async_log = new SrsAsyncLogManager();
 
-SrsAsyncSRTP::SrsAsyncSRTP()
+SrsAsyncSRTP::SrsAsyncSRTP(SrsSecurityTransport* transport)
 {
+    task_ = NULL;
+    transport_ = transport;
 }
 
 SrsAsyncSRTP::~SrsAsyncSRTP()
 {
+    // TODO: FIXME: Check it carefully.
+    _srs_async_srtp->remove_task(task_);
+}
+
+srs_error_t SrsAsyncSRTP::initialize(std::string recv_key, std::string send_key)
+{
+    srs_error_t err = srs_success;
+
+    srs_assert(!task_);
+    task_ = new SrsAsyncSRTPTask(this);
+    _srs_async_srtp->register_task(task_);
+
+    if ((err = task_->initialize(recv_key, send_key)) != srs_success) {
+        return srs_error_wrap(err, "init async srtp");
+    }
+
+    // TODO: FIMXE: Remove it.
+    return SrsSRTP::initialize(recv_key, send_key);
 }
 
 srs_error_t SrsAsyncSRTP::protect_rtp(void* packet, int* nb_cipher)
 {
+    // TODO: FIMXE: Remove it.
     return SrsSRTP::protect_rtp(packet, nb_cipher);
 }
 
 srs_error_t SrsAsyncSRTP::protect_rtcp(void* packet, int* nb_cipher)
 {
+    // TODO: FIMXE: Remove it.
     return SrsSRTP::protect_rtcp(packet, nb_cipher);
 }
 
 srs_error_t SrsAsyncSRTP::unprotect_rtp(void* packet, int* nb_plaintext)
 {
-    return SrsSRTP::unprotect_rtp(packet, nb_plaintext);
+    int nb_cipher = *nb_plaintext;
+    char* buf = new char[nb_cipher];
+    memcpy(buf, packet, nb_cipher);
+
+    SrsAsyncSRTPPacket* pkt = new SrsAsyncSRTPPacket(task_);
+    pkt->msg_->wrap(buf, nb_cipher);
+    pkt->is_rtp_ = true;
+    pkt->do_decrypt_ = true;
+    _srs_async_srtp->add_packet(pkt);
+
+    // Do the job asynchronously.
+    *nb_plaintext = 0;
+
+    return srs_success;
 }
 
 srs_error_t SrsAsyncSRTP::unprotect_rtcp(void* packet, int* nb_plaintext)
 {
+    // TODO: FIMXE: Remove it.
     return SrsSRTP::unprotect_rtcp(packet, nb_plaintext);
 }
+
+SrsAsyncSRTPTask::SrsAsyncSRTPTask(SrsAsyncSRTP* codec)
+{
+    codec_ = codec;
+    impl_ = new SrsSRTP();
+}
+
+SrsAsyncSRTPTask::~SrsAsyncSRTPTask()
+{
+    srs_freep(impl_);
+}
+
+srs_error_t SrsAsyncSRTPTask::initialize(std::string recv_key, std::string send_key)
+{
+    srs_error_t err = srs_success;
+
+    if ((err = impl_->initialize(recv_key, send_key)) != srs_success) {
+        return srs_error_wrap(err, "init srtp impl");
+    }
+
+    return err;
+}
+
+srs_error_t SrsAsyncSRTPTask::cook(SrsAsyncSRTPPacket* pkt)
+{
+    srs_error_t err = srs_success;
+
+    if (pkt->do_decrypt_) {
+        if (pkt->is_rtp_) {
+            pkt->nb_consumed_ = pkt->msg_->size;
+            err = impl_->unprotect_rtp(pkt->msg_->payload, &pkt->nb_consumed_);
+        }
+    }
+    if (err != srs_success) {
+        return err;
+    }
+
+    return err;
+}
+
+SrsAsyncSRTPPacket::SrsAsyncSRTPPacket(SrsAsyncSRTPTask* task)
+{
+    task_ = task;
+    msg_ = new SrsSharedPtrMessage();
+    is_rtp_ = false;
+    do_decrypt_ = false;
+    nb_consumed_ = 0;
+}
+
+SrsAsyncSRTPPacket::~SrsAsyncSRTPPacket()
+{
+    srs_freep(msg_);
+}
+
+SrsAsyncSRTPManager::SrsAsyncSRTPManager()
+{
+    lock_ = new SrsThreadMutex();
+    packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
+    cooked_packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
+}
+
+// TODO: FIXME: We should stop the thread first, then free the manager.
+SrsAsyncSRTPManager::~SrsAsyncSRTPManager()
+{
+    srs_freep(lock_);
+    srs_freep(packets_);
+    srs_freep(cooked_packets_);
+
+    vector<SrsAsyncSRTPTask*>::iterator it;
+    for (it = tasks_.begin(); it != tasks_.end(); ++it) {
+        SrsAsyncSRTPTask* task = *it;
+        srs_freep(task);
+    }
+}
+
+void SrsAsyncSRTPManager::register_task(SrsAsyncSRTPTask* task)
+{
+    if (!task) {
+        return;
+    }
+
+    SrsThreadLocker(lock_);
+    tasks_.push_back(task);
+}
+
+void SrsAsyncSRTPManager::remove_task(SrsAsyncSRTPTask* task)
+{
+    if (!task) {
+        return;
+    }
+
+    SrsThreadLocker(lock_);
+    vector<SrsAsyncSRTPTask*>::iterator it;
+    if ((it = std::find(tasks_.begin(), tasks_.end(), task)) != tasks_.end()) {
+        tasks_.erase(it);
+        srs_freep(task);
+    }
+}
+
+void SrsAsyncSRTPManager::add_packet(SrsAsyncSRTPPacket* pkt)
+{
+    packets_->push_back(pkt);
+}
+
+srs_error_t SrsAsyncSRTPManager::start(void* arg)
+{
+    SrsAsyncSRTPManager* srtp = (SrsAsyncSRTPManager*)arg;
+    return srtp->do_start();
+}
+
+srs_error_t SrsAsyncSRTPManager::do_start()
+{
+    srs_error_t err = srs_success;
+
+    srs_utime_t interval = 10 * SRS_UTIME_MILLISECONDS;
+    while (true) {
+        vector<SrsAsyncSRTPPacket*> flying;
+        packets_->swap(flying);
+
+        for (int i = 0; i < (int)flying.size(); i++) {
+            SrsAsyncSRTPPacket* pkt = flying.at(i);
+
+            if ((err = pkt->task_->cook(pkt)) != srs_success) {
+                srs_error_reset(err); // Ignore any error.
+            }
+
+            cooked_packets_->push_back(pkt);
+        }
+
+        // If got packets, maybe more packets in queue.
+        if (!flying.empty()) {
+            continue;
+        }
+
+        // TODO: FIXME: Maybe we should use cond wait?
+        timespec tv = {0};
+        tv.tv_sec = interval / SRS_UTIME_SECONDS;
+        tv.tv_nsec = (interval % SRS_UTIME_MILLISECONDS) * 1000;
+        nanosleep(&tv, NULL);
+    }
+
+    return err;
+}
+
+srs_error_t SrsAsyncSRTPManager::consume()
+{
+    srs_error_t err = srs_success;
+
+    vector<SrsAsyncSRTPPacket*> flying;
+    cooked_packets_->swap(flying);
+
+    for (int i = 0; i < (int)flying.size(); i++) {
+        SrsAsyncSRTPPacket* pkt = flying.at(i);
+        SrsSecurityTransport* transport = pkt->task_->codec_->transport_;
+        char* payload = pkt->msg_->payload;
+
+        if (pkt->do_decrypt_) {
+            if (pkt->is_rtp_) {
+                err = transport->on_rtp_plaintext(payload, pkt->nb_consumed_);
+            }
+        }
+        if (err != srs_success) {
+            srs_error_reset(err); // Ignore any error.
+        }
+
+        srs_freep(pkt);
+    }
+
+    return err;
+}
+
+SrsAsyncSRTPManager* _srs_async_srtp = new SrsAsyncSRTPManager();

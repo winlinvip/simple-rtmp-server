@@ -29,6 +29,7 @@
 #include <srs_kernel_file.hpp>
 #include <srs_kernel_flv.hpp>
 #include <srs_app_rtc_dtls.hpp>
+#include <srs_app_rtc_conn.hpp>
 
 #include <pthread.h>
 
@@ -36,6 +37,9 @@
 #include <string>
 
 class SrsThreadPool;
+class SrsAsyncSRTPTask;
+class SrsAsyncSRTPPacket;
+class SrsSecurityTransport;
 
 // The thread mutex wrapper, without error.
 class SrsThreadMutex
@@ -259,13 +263,77 @@ extern SrsAsyncLogManager* _srs_async_log;
 class SrsAsyncSRTP : public SrsSRTP
 {
 public:
-    SrsAsyncSRTP();
+    SrsAsyncSRTPTask* task_;
+    SrsSecurityTransport* transport_;
+public:
+    SrsAsyncSRTP(SrsSecurityTransport* transport);
     virtual ~SrsAsyncSRTP();
 public:
+    srs_error_t initialize(std::string recv_key, std::string send_key);
     srs_error_t protect_rtp(void* packet, int* nb_cipher);
     srs_error_t protect_rtcp(void* packet, int* nb_cipher);
     srs_error_t unprotect_rtp(void* packet, int* nb_plaintext);
     srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext);
 };
+
+// The async SRTP task, bind to the codec, managed by SrsAsyncSRTPManager,
+// which alive longer than either SrsAsyncSRTPTask or SrsAsyncSRTP.
+class SrsAsyncSRTPTask
+{
+public:
+    SrsAsyncSRTP* codec_;
+    SrsSRTP* impl_;
+public:
+    SrsAsyncSRTPTask(SrsAsyncSRTP* codec);
+    virtual ~SrsAsyncSRTPTask();
+public:
+    srs_error_t initialize(std::string recv_key, std::string send_key);
+public:
+    srs_error_t cook(SrsAsyncSRTPPacket* pkt);
+};
+
+// The async SRTP packet, handle by task.
+class SrsAsyncSRTPPacket
+{
+public:
+    bool is_rtp_;
+    bool do_decrypt_;
+    SrsAsyncSRTPTask* task_;
+    SrsSharedPtrMessage* msg_;
+public:
+    int nb_consumed_;
+public:
+    SrsAsyncSRTPPacket(SrsAsyncSRTPTask* task);
+    virtual ~SrsAsyncSRTPPacket();
+};
+
+// The async SRTP manager, to start a thread to consume packets.
+class SrsAsyncSRTPManager
+{
+private:
+    std::vector<SrsAsyncSRTPTask*> tasks_;
+    SrsThreadMutex* lock_;
+private:
+    SrsThreadQueue<SrsAsyncSRTPPacket>* packets_;
+private:
+    // The packets cooked by async SRTP manager.
+    SrsThreadQueue<SrsAsyncSRTPPacket>* cooked_packets_;
+public:
+    SrsAsyncSRTPManager();
+    virtual ~SrsAsyncSRTPManager();
+public:
+    void register_task(SrsAsyncSRTPTask* task);
+    void remove_task(SrsAsyncSRTPTask* task);
+    void add_packet(SrsAsyncSRTPPacket* pkt);
+    static srs_error_t start(void* arg);
+private:
+    srs_error_t do_start();
+public:
+    // Consume cooked SRTP packets. Must call in worker/service thread.
+    virtual srs_error_t consume();
+};
+
+// The global async SRTP manager.
+extern SrsAsyncSRTPManager* _srs_async_srtp;
 
 #endif

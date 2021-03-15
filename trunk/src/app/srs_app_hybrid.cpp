@@ -28,6 +28,7 @@
 #include <srs_kernel_error.hpp>
 #include <srs_service_st.hpp>
 #include <srs_app_utility.hpp>
+#include <srs_app_threads.hpp>
 
 using namespace std;
 

@@ -487,6 +487,11 @@ srs_error_t run_in_thread_pool()
         return srs_error_wrap(err, "start async log thread");
     }
 
+    // Start the async SRTP worker thread, to encrypt/decrypt SRTP packets.
+    if ((err = _srs_thread_pool->execute("srtp", SrsAsyncSRTPManager::start, _srs_async_srtp)) != srs_success) {
+        return srs_error_wrap(err, "start async srtp thread");
+    }
+
     // Start the service worker thread, for RTMP and RTC server, etc.
     if ((err = _srs_thread_pool->execute("hybrid", run_hybrid_server, NULL)) != srs_success) {
         return srs_error_wrap(err, "start hybrid server thread");
