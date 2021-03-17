@@ -184,10 +184,6 @@ srs_error_t SrsThreadPool::initialize()
     r1 = pthread_getaffinity_np(pthread_self(), sizeof(entry->cpuset2), &entry->cpuset2);
 #endif
 
-    if ((err = _srs_async_recv->initialize()) != srs_success) {
-        return srs_error_wrap(err, "init async recv");
-    }
-
     interval_ = _srs_config->get_threads_interval();
     bool async_srtp = _srs_config->get_threads_async_srtp();
     srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64,
@@ -705,11 +701,14 @@ SrsAsyncSRTPManager::SrsAsyncSRTPManager()
     lock_ = new SrsThreadMutex();
     packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
     cooked_packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
+    trd_ = new SrsFastCoroutine("srtp", this);
 }
 
 // TODO: FIXME: We should stop the thread first, then free the manager.
 SrsAsyncSRTPManager::~SrsAsyncSRTPManager()
 {
+    srs_freep(trd_);
+
     srs_freep(lock_);
     srs_freep(packets_);
     srs_freep(cooked_packets_);
@@ -806,24 +805,56 @@ srs_error_t SrsAsyncSRTPManager::consume()
 {
     srs_error_t err = srs_success;
 
-    vector<SrsAsyncSRTPPacket*> flying;
-    cooked_packets_->swap(flying);
+    if ((err = trd_->start()) != srs_success) {
+        return srs_error_wrap(err, "start");
+    }
 
-    for (int i = 0; i < (int)flying.size(); i++) {
-        SrsAsyncSRTPPacket* pkt = flying.at(i);
-        SrsSecurityTransport* transport = pkt->task_->codec_->transport_;
-        char* payload = pkt->msg_->payload;
+    return err;
+}
 
-        if (pkt->do_decrypt_) {
-            if (pkt->is_rtp_) {
-                err = transport->on_rtp_plaintext(payload, pkt->nb_consumed_);
+srs_error_t SrsAsyncSRTPManager::cycle()
+{
+    srs_error_t err = srs_success;
+
+    // How many messages to run a yield.
+    uint32_t nn_msgs_for_yield = 0;
+
+    while (true) {
+        if ((err = trd_->pull()) != srs_success) {
+            return srs_error_wrap(err, "pull");
+        }
+
+        vector<SrsAsyncSRTPPacket*> flying;
+        cooked_packets_->swap(flying);
+
+        if (flying.empty()) {
+            srs_usleep(20 * SRS_UTIME_MILLISECONDS);
+            continue;
+        }
+
+        for (int i = 0; i < (int)flying.size(); i++) {
+            SrsAsyncSRTPPacket* pkt = flying.at(i);
+            SrsSecurityTransport* transport = pkt->task_->codec_->transport_;
+            char* payload = pkt->msg_->payload;
+
+            if (pkt->do_decrypt_) {
+                if (pkt->is_rtp_) {
+                    err = transport->on_rtp_plaintext(payload, pkt->nb_consumed_);
+                }
+            }
+            if (err != srs_success) {
+                srs_error_reset(err); // Ignore any error.
+            }
+
+            srs_freep(pkt);
+
+            // Yield to another coroutines.
+            // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
+            if (++nn_msgs_for_yield > 10) {
+                nn_msgs_for_yield = 0;
+                srs_thread_yield();
             }
         }
-        if (err != srs_success) {
-            srs_error_reset(err); // Ignore any error.
-        }
-
-        srs_freep(pkt);
     }
 
     return err;
@@ -846,11 +877,14 @@ SrsAsyncRecvManager::SrsAsyncRecvManager()
     packets_ = new SrsThreadQueue<SrsUdpMuxSocket>();
     handler_ = NULL;
     max_recv_queue_ = 0;
+    trd_ = new SrsFastCoroutine("recv", this);
 }
 
 // TODO: FIXME: We should stop the thread first, then free the manager.
 SrsAsyncRecvManager::~SrsAsyncRecvManager()
 {
+    srs_freep(trd_);
+
     srs_freep(lock_);
     srs_freep(packets_);
 
@@ -859,16 +893,6 @@ SrsAsyncRecvManager::~SrsAsyncRecvManager()
         SrsThreadUdpListener* listener = *it;
         srs_freep(listener);
     }
-}
-
-srs_error_t SrsAsyncRecvManager::initialize()
-{
-    srs_error_t err = srs_success;
-
-    max_recv_queue_ = _srs_config->get_threads_max_recv_queue();
-    srs_trace("AsyncRecv: Set max_queue=%d", max_recv_queue_);
-
-    return err;
 }
 
 void SrsAsyncRecvManager::set_handler(ISrsUdpMuxHandler* v)
@@ -946,17 +970,52 @@ srs_error_t SrsAsyncRecvManager::consume()
 {
     srs_error_t err = srs_success;
 
-    vector<SrsUdpMuxSocket*> flying;
-    packets_->swap(flying);
+    max_recv_queue_ = _srs_config->get_threads_max_recv_queue();
+    srs_trace("AsyncRecv: Set max_queue=%d", max_recv_queue_);
 
-    for (int i = 0; i < (int)flying.size(); i++) {
-        SrsUdpMuxSocket* pkt = flying.at(i);
+    if ((err = trd_->start()) != srs_success) {
+        return srs_error_wrap(err, "start");
+    }
 
-        if (handler_ && (err = handler_->on_udp_packet(pkt)) != srs_success) {
-            srs_error_reset(err); // Ignore any error.
+    return err;
+}
+
+srs_error_t SrsAsyncRecvManager::cycle()
+{
+    srs_error_t err = srs_success;
+
+    // How many messages to run a yield.
+    uint32_t nn_msgs_for_yield = 0;
+
+    while (true) {
+        if ((err = trd_->pull()) != srs_success) {
+            return srs_error_wrap(err, "pull");
         }
 
-        srs_freep(pkt);
+        vector<SrsUdpMuxSocket*> flying;
+        packets_->swap(flying);
+
+        if (flying.empty()) {
+            srs_usleep(20 * SRS_UTIME_MILLISECONDS);
+            continue;
+        }
+
+        for (int i = 0; i < (int)flying.size(); i++) {
+            SrsUdpMuxSocket* pkt = flying.at(i);
+
+            if (handler_ && (err = handler_->on_udp_packet(pkt)) != srs_success) {
+                srs_error_reset(err); // Ignore any error.
+            }
+
+            srs_freep(pkt);
+
+            // Yield to another coroutines.
+            // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
+            if (++nn_msgs_for_yield > 10) {
+                nn_msgs_for_yield = 0;
+                srs_thread_yield();
+            }
+        }
     }
 
     return err;

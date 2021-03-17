@@ -31,6 +31,7 @@
 #include <srs_app_rtc_dtls.hpp>
 #include <srs_app_rtc_conn.hpp>
 #include <srs_app_listener.hpp>
+#include <srs_app_st.hpp>
 
 #include <pthread.h>
 
@@ -321,7 +322,7 @@ public:
 };
 
 // The async SRTP manager, to start a thread to consume packets.
-class SrsAsyncSRTPManager
+class SrsAsyncSRTPManager : public ISrsCoroutineHandler
 {
 private:
     std::vector<SrsAsyncSRTPTask*> tasks_;
@@ -329,6 +330,8 @@ private:
 private:
     SrsThreadQueue<SrsAsyncSRTPPacket>* packets_;
 private:
+    // A coroutine to consume cooked packets.
+    SrsFastCoroutine* trd_;
     // The packets cooked by async SRTP manager.
     SrsThreadQueue<SrsAsyncSRTPPacket>* cooked_packets_;
 public:
@@ -346,6 +349,8 @@ private:
 public:
     // Consume cooked SRTP packets. Must call in worker/service thread.
     virtual srs_error_t consume();
+private:
+    srs_error_t cycle();
 };
 
 // The global async SRTP manager.
@@ -363,12 +368,16 @@ public:
 };
 
 // The async RECV manager, to recv UDP packets.
-class SrsAsyncRecvManager
+class SrsAsyncRecvManager : public ISrsCoroutineHandler
 {
 private:
     ISrsUdpMuxHandler* handler_;
 private:
+    // A coroutine to consume received packets.
+    SrsFastCoroutine* trd_;
+    // If exceed max queue, drop packet.
     int max_recv_queue_;
+    // The received UDP packets.
     SrsThreadQueue<SrsUdpMuxSocket>* packets_;
 private:
     std::vector<SrsThreadUdpListener*> listeners_;
@@ -377,7 +386,6 @@ public:
     SrsAsyncRecvManager();
     virtual ~SrsAsyncRecvManager();
 public:
-    srs_error_t initialize();
     void set_handler(ISrsUdpMuxHandler* v);
     void add_listener(SrsThreadUdpListener* listener);
     int size();
@@ -387,6 +395,8 @@ private:
 public:
     // Consume received UDP packets. Must call in worker/service thread.
     virtual srs_error_t consume();
+private:
+    srs_error_t cycle();
 };
 
 // The global async RECV manager.
