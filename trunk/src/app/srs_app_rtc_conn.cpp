@@ -76,6 +76,7 @@ extern SrsPps* _srs_pps_snack2;
 
 extern SrsPps* _srs_pps_rnack;
 extern SrsPps* _srs_pps_rnack2;
+extern SrsPps* _srs_pps_snack4;
 
 #define SRS_TICKID_RTCP 0
 #define SRS_TICKID_TWCC 1
@@ -1283,6 +1284,12 @@ srs_error_t SrsRtcPublishStream::do_on_rtp_plaintext(SrsRtpPacket2*& pkt, SrsBuf
         }
     }
 
+    // If circuit-breaker is enabled, disable nack.
+    if (_srs_thread_pool->hybrid_critical_water_level()) {
+        ++_srs_pps_snack4->sugar;
+        return err;
+    }
+
     // For NACK to handle packet.
     // @remark Note that the pkt might be set to NULL.
     if (nack_enabled_) {
@@ -1528,6 +1535,12 @@ srs_error_t SrsRtcPublishStream::notify(int type, srs_utime_t interval, srs_utim
 
     if (twcc_enabled_ && type == SRS_TICKID_TWCC) {
         ++_srs_pps_twcc->sugar;
+
+        // If circuit-breaker is dropping packet, disable TWCC.
+        if (_srs_thread_pool->hybrid_critical_water_level()) {
+            ++_srs_pps_snack4->sugar;
+            return err;
+        }
 
         // We should not depends on the received packet,
         // instead we should send feedback every Nms.
@@ -2333,6 +2346,12 @@ srs_error_t SrsRtcConnection::notify(int type, srs_utime_t interval, srs_utime_t
 
     // For publisher to send NACK.
     if (type == SRS_TICKID_SEND_NACKS) {
+        // If circuit-breaker is enabled, disable nack.
+        if (_srs_thread_pool->hybrid_critical_water_level()) {
+            ++_srs_pps_snack4->sugar;
+            return err;
+        }
+
         // TODO: FIXME: Merge with hybrid system clock.
         srs_update_system_time();
 

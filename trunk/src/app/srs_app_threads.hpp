@@ -42,6 +42,7 @@ class SrsThreadPool;
 class SrsAsyncSRTPTask;
 class SrsAsyncSRTPPacket;
 class SrsSecurityTransport;
+class SrsProcSelfStat;
 
 // The thread mutex wrapper, without error.
 class SrsThreadMutex
@@ -90,15 +91,20 @@ public:
     srs_error_t (*start)(void* arg);
     void* arg;
     int num;
+    // @see https://man7.org/linux/man-pages/man2/gettid.2.html
+    pid_t tid;
 public:
     // The thread object.
     pthread_t trd;
     // The exit error of thread.
     srs_error_t err;
+public:
     // @see https://man7.org/linux/man-pages/man3/pthread_setaffinity_np.3.html
     cpu_set_t cpuset; // Config value.
     cpu_set_t cpuset2; // Actual value.
     bool cpuset_ok;
+public:
+    SrsProcSelfStat* stat;
 public:
     SrsThreadEntry();
     virtual ~SrsThreadEntry();
@@ -114,10 +120,26 @@ private:
 private:
     SrsThreadMutex* lock_;
     std::vector<SrsThreadEntry*> threads_;
+private:
+    // The hybrid server entry, the cpu percent used for circuit breaker.
+    SrsThreadEntry* hybrid_;
+    // Reset the water-level when CPU is low for N times.
+    // @note To avoid the CPU change rapidly.
+    int hybrid_high_water_level_;
+    int hybrid_critical_water_level_;
+private:
+    // The config for high/critical water level.
+    int high_threshold_;
+    int high_pulse_;
+    int critical_threshold_;
+    int critical_pulse_;
 public:
     SrsThreadPool();
     virtual ~SrsThreadPool();
 public:
+    // Whether hybrid server water-level is high.
+    bool hybrid_high_water_level();
+    bool hybrid_critical_water_level();
     // Setup the thread-local variables.
     static void setup();
     // Initialize the thread pool.
@@ -375,10 +397,11 @@ private:
 private:
     // A coroutine to consume received packets.
     SrsFastCoroutine* trd_;
-    // If exceed max queue, drop packet.
-    int max_recv_queue_;
     // The received UDP packets.
     SrsThreadQueue<SrsUdpMuxSocket>* packets_;
+private:
+    // If exceed max queue, drop packet.
+    int max_recv_queue_;
 private:
     std::vector<SrsThreadUdpListener*> listeners_;
     SrsThreadMutex* lock_;
@@ -386,6 +409,7 @@ public:
     SrsAsyncRecvManager();
     virtual ~SrsAsyncRecvManager();
 public:
+    // Set the handler to process the received UDP packet.
     void set_handler(ISrsUdpMuxHandler* v);
     void add_listener(SrsThreadUdpListener* listener);
     int size();

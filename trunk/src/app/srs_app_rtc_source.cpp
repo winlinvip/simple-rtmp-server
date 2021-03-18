@@ -53,6 +53,8 @@
 // The NACK sent by us(SFU).
 SrsPps* _srs_pps_snack = new SrsPps();
 SrsPps* _srs_pps_snack2 = new SrsPps();
+SrsPps* _srs_pps_snack3 = new SrsPps();
+SrsPps* _srs_pps_snack4 = new SrsPps();
 SrsPps* _srs_pps_sanack = new SrsPps();
 SrsPps* _srs_pps_svnack = new SrsPps();
 

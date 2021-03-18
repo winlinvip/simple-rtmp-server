@@ -333,7 +333,7 @@ SrsProcSystemStat* srs_get_system_proc_stat()
     return &_srs_system_cpu_system_stat;
 }
 
-bool get_proc_system_stat(SrsProcSystemStat& r)
+bool read_proc_system_stat(SrsProcSystemStat& r)
 {
 #ifndef SRS_OSX
     FILE* f = fopen("/proc/stat", "r");
@@ -372,15 +372,16 @@ bool get_proc_system_stat(SrsProcSystemStat& r)
     return true;
 }
 
-bool get_proc_self_stat(SrsProcSelfStat& r)
+bool read_proc_self_stat(const char* path, SrsProcSelfStat& r)
 {
 #ifndef SRS_OSX
-    FILE* f = fopen("/proc/self/stat", "r");
+    FILE* f = fopen(path, "r");
     if (f == NULL) {
         srs_warn("open self cpu stat failed, ignore");
         return false;
     }
-    
+
+    // Please read /proc/[pid]/stat of @doc https://man7.org/linux/man-pages/man5/procfs.5.html
     fscanf(f, "%d %32s %c %d %d %d %d "
            "%d %u %lu %lu %lu %lu "
            "%lu %lu %ld %ld %ld %ld "
@@ -408,24 +409,16 @@ bool get_proc_self_stat(SrsProcSelfStat& r)
     return true;
 }
 
-void srs_update_proc_stat()
+void srs_update_system_proc_stat()
 {
-    // @see: http://stackoverflow.com/questions/7298646/calculating-user-nice-sys-idle-iowait-irq-and-sirq-from-proc-stat/7298711
-    // @see https://github.com/ossrs/srs/issues/397
-    static int user_hz = 0;
-    if (user_hz <= 0) {
-        user_hz = (int)sysconf(_SC_CLK_TCK);
-        srs_info("USER_HZ=%d", user_hz);
-        srs_assert(user_hz > 0);
-    }
-    
     // system cpu stat
     if (true) {
         SrsProcSystemStat r;
-        if (!get_proc_system_stat(r)) {
+        if (!read_proc_system_stat(r)) {
             return;
         }
-        
+
+        // TODO: FIXME: Use system time cache.
         r.sample_time = srsu2ms(srs_update_system_time());
         
         // calc usage in percent
@@ -444,29 +437,70 @@ void srs_update_proc_stat()
         // upate cache.
         _srs_system_cpu_system_stat = r;
     }
+}
+
+void srs_update_self_proc_stat()
+{
+    srs_update_thread_proc_stat(&_srs_system_cpu_self_stat, 0);
+}
+
+void srs_update_thread_proc_stat(SrsProcSelfStat* stat, pid_t tid)
+{
+    // @see: http://stackoverflow.com/questions/7298646/calculating-user-nice-sys-idle-iowait-irq-and-sirq-from-proc-stat/7298711
+    // @see https://github.com/ossrs/srs/issues/397
+    int user_hz = srs_user_hz();
     
-    // self cpu stat
-    if (true) {
-        SrsProcSelfStat r;
-        if (!get_proc_self_stat(r)) {
+    // self process cpu stat
+    SrsProcSelfStat r;
+
+    // @see https://man7.org/linux/man-pages/man5/procfs.5.html
+    if (tid == 0) {
+        if (!read_proc_self_stat("/proc/self/stat", r)) {
             return;
         }
-        
-        r.sample_time = srsu2ms(srs_update_system_time());
-        
-        // calc usage in percent
-        SrsProcSelfStat& o = _srs_system_cpu_self_stat;
-        
-        // @see: http://stackoverflow.com/questions/16011677/calculating-cpu-usage-using-proc-files
-        int64_t total = r.sample_time - o.sample_time;
-        int64_t usage = (r.utime + r.stime) - (o.utime + o.stime);
-        if (total > 0) {
-            r.percent = (float)(usage * 1000 / (double)total / user_hz);
+    } else {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "/proc/self/task/%d/stat", (int)tid);
+        if (!read_proc_self_stat(buf, r)) {
+            return;
         }
-        
-        // upate cache.
-        _srs_system_cpu_self_stat = r;
     }
+
+    // calc usage in percent
+    SrsProcSelfStat* o = stat;
+
+    // Never update in 1s.
+    if (srs_update_system_time() - o->sample_time <= 1 * SRS_UTIME_SECONDS) {
+        return;
+    }
+
+    // TODO: FIXME: Use system time cache.
+    r.sample_time = srsu2ms(srs_update_system_time());
+
+    // @see: http://stackoverflow.com/questions/16011677/calculating-cpu-usage-using-proc-files
+    int64_t total = r.sample_time - o->sample_time;
+    int64_t usage = (r.utime + r.stime) - (o->utime + o->stime);
+    if (total > 0) {
+        r.percent = (float)(usage * 1000 / (double)total / user_hz);
+    }
+
+    // update cache.
+    *stat = r;
+}
+
+int srs_user_hz()
+{
+    // @see: http://stackoverflow.com/questions/7298646/calculating-user-nice-sys-idle-iowait-irq-and-sirq-from-proc-stat/7298711
+    // @see https://github.com/ossrs/srs/issues/397
+    static int user_hz = 0;
+
+    if (user_hz <= 0) {
+        user_hz = (int)sysconf(_SC_CLK_TCK);
+        srs_info("USER_HZ=%d", user_hz);
+        srs_assert(user_hz > 0);
+    }
+
+    return user_hz;
 }
 
 SrsDiskStat::SrsDiskStat()
@@ -616,7 +650,7 @@ void srs_update_disk_stat()
     if (!srs_get_disk_diskstats_stat(r)) {
         return;
     }
-    if (!get_proc_system_stat(r.cpu)) {
+    if (!read_proc_system_stat(r.cpu)) {
         return;
     }
     

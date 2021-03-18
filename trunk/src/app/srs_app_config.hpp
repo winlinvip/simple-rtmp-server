@@ -482,6 +482,10 @@ public:
     virtual bool get_threads_async_recv();
     virtual bool get_threads_cpu_affinity(std::string label, int* start, int* end);
     virtual int get_threads_max_recv_queue();
+    virtual int get_high_threshold();
+    virtual int get_high_pulse();
+    virtual int get_critical_threshold();
+    virtual int get_critical_pulse();
 // stream_caster section
 public:
     // Get all stream_caster in config file.

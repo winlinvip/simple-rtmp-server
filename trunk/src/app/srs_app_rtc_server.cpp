@@ -67,6 +67,8 @@ extern SrsPps* _srs_pps_rr;
 
 extern SrsPps* _srs_pps_snack;
 extern SrsPps* _srs_pps_snack2;
+extern SrsPps* _srs_pps_snack3;
+extern SrsPps* _srs_pps_snack4;
 extern SrsPps* _srs_pps_sanack;
 extern SrsPps* _srs_pps_svnack;
 
@@ -687,9 +689,9 @@ srs_error_t SrsRtcServer::on_timer(srs_utime_t interval, srs_utime_t tick)
     }
 
     string snk_desc;
-    _srs_pps_snack->update(); _srs_pps_snack2->update(); _srs_pps_sanack->update(); _srs_pps_svnack->update();
-    if (_srs_pps_snack->r10s() || _srs_pps_sanack->r10s() || _srs_pps_svnack->r10s() || _srs_pps_snack2->r10s()) {
-        snprintf(buf, sizeof(buf), ", snk=(%d,a:%d,v:%d,h:%d)", _srs_pps_snack->r10s(), _srs_pps_sanack->r10s(), _srs_pps_svnack->r10s(), _srs_pps_snack2->r10s());
+    _srs_pps_snack->update(); _srs_pps_snack2->update(); _srs_pps_snack3->update(); _srs_pps_snack4->update(); _srs_pps_sanack->update(); _srs_pps_svnack->update();
+    if (_srs_pps_snack->r10s() || _srs_pps_sanack->r10s() || _srs_pps_svnack->r10s() || _srs_pps_snack2->r10s() || _srs_pps_snack3->r10s() || _srs_pps_snack4->r10s()) {
+        snprintf(buf, sizeof(buf), ", snk=(%d,a:%d,v:%d,h:%d,h3:%d,h4:%d)", _srs_pps_snack->r10s(), _srs_pps_sanack->r10s(), _srs_pps_svnack->r10s(), _srs_pps_snack2->r10s(), _srs_pps_snack3->r10s(), _srs_pps_snack4->r10s());
         snk_desc = buf;
     }
 
@@ -702,9 +704,8 @@ srs_error_t SrsRtcServer::on_timer(srs_utime_t interval, srs_utime_t tick)
 
     // TODO: FIXME: Should move to Hybrid server stat.
     string loss_desc;
-    _srs_pps_aloss->update();
-    if (_srs_pps_rloss->r10s() || _srs_pps_sloss->r10s() || _srs_pps_aloss->r10s()) {
-        snprintf(buf, sizeof(buf), ", loss=(r:%d,s:%d,a:%d)", _srs_pps_rloss->r10s(), _srs_pps_sloss->r10s(), _srs_pps_aloss->r10s());
+    if (!snk_desc.empty() || _srs_pps_rloss->r1s() || _srs_pps_rloss->r10s() || _srs_pps_sloss->r10s() || _srs_pps_aloss->r10s()) {
+        snprintf(buf, sizeof(buf), ", loss=(r:%d/%d,s:%d,a:%d)", _srs_pps_rloss->r1s(), _srs_pps_rloss->r10s(), _srs_pps_sloss->r10s(), _srs_pps_aloss->r10s());
         loss_desc = buf;
     }
 

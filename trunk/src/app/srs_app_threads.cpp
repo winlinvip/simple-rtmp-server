@@ -28,19 +28,36 @@
 #include <srs_app_log.hpp>
 #include <srs_core_autofree.hpp>
 #include <srs_kernel_utility.hpp>
+#include <srs_app_utility.hpp>
 
 #include <unistd.h>
+
+#ifdef SRS_OSX
+    pid_t gettid() {
+        return 0;
+    }
+#else
+    #if __GLIBC__ == 2 && __GLIBC_MINOR__ < 30
+        #include <sys/syscall.h>
+        #define gettid() syscall(SYS_gettid)
+    #endif
+#endif
 
 using namespace std;
 
 #include <srs_protocol_kbps.hpp>
 
+extern SrsPps* _srs_pps_rloss;
+extern SrsPps* _srs_pps_aloss;
+
+extern SrsPps* _srs_pps_snack2;
+extern SrsPps* _srs_pps_snack3;
+extern SrsPps* _srs_pps_snack4;
+
 SrsPps* _srs_thread_sync_10us = new SrsPps();
 SrsPps* _srs_thread_sync_100us = new SrsPps();
 SrsPps* _srs_thread_sync_1000us = new SrsPps();
 SrsPps* _srs_thread_sync_plus = new SrsPps();
-
-extern SrsPps* _srs_pps_aloss;
 
 uint64_t srs_covert_cpuset(cpu_set_t v)
 {
@@ -103,6 +120,7 @@ SrsThreadEntry::SrsThreadEntry()
     start = NULL;
     arg = NULL;
     num = 0;
+    tid = 0;
 
     err = srs_success;
 
@@ -110,17 +128,30 @@ SrsThreadEntry::SrsThreadEntry()
     CPU_ZERO(&cpuset);
     CPU_ZERO(&cpuset2);
     cpuset_ok = false;
+
+    stat = new SrsProcSelfStat();
 }
 
 SrsThreadEntry::~SrsThreadEntry()
 {
-    // TODO: FIXME: Should dispose err and trd.
+    srs_freep(stat);
+    srs_freep(err);
+
+    // TODO: FIXME: Should dispose trd.
 }
 
 SrsThreadPool::SrsThreadPool()
 {
     entry_ = NULL;
     lock_ = new SrsThreadMutex();
+    hybrid_ = NULL;
+    hybrid_high_water_level_ = 0;
+    hybrid_critical_water_level_ = 0;
+
+    high_threshold_ = 0;
+    high_pulse_ = 0;
+    critical_threshold_ = 0;
+    critical_pulse_ = 0;
 
     // Add primordial thread, current thread itself.
     SrsThreadEntry* entry = new SrsThreadEntry();
@@ -133,6 +164,7 @@ SrsThreadPool::SrsThreadPool()
     entry->arg = NULL;
     entry->num = 1;
     entry->trd = pthread_self();
+    entry->tid = gettid();
 
     char buf[256];
     snprintf(buf, sizeof(buf), "srs-master-%d", entry->num);
@@ -145,7 +177,17 @@ SrsThreadPool::~SrsThreadPool()
     srs_freep(lock_);
 }
 
-// Thread local log cache.
+bool SrsThreadPool::hybrid_high_water_level()
+{
+    return hybrid_critical_water_level_ || hybrid_high_water_level_;
+}
+
+bool SrsThreadPool::hybrid_critical_water_level()
+{
+    return hybrid_critical_water_level_;
+}
+
+// Thread local objects.
 extern const int LOG_MAX_SIZE;
 extern __thread char* _srs_log_data;
 
@@ -185,10 +227,15 @@ srs_error_t SrsThreadPool::initialize()
 #endif
 
     interval_ = _srs_config->get_threads_interval();
+    high_threshold_ = _srs_config->get_high_threshold();
+    high_pulse_ = _srs_config->get_high_pulse();
+    critical_threshold_ = _srs_config->get_critical_threshold();
+    critical_pulse_ = _srs_config->get_critical_pulse();
     bool async_srtp = _srs_config->get_threads_async_srtp();
-    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64,
+    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d",
         entry->num, entry->label.c_str(), entry->name.c_str(), srsu2msi(interval_), async_srtp,
-        entry->cpuset_ok, r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2));
+        entry->cpuset_ok, r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2),
+        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_);
 
     return err;
 }
@@ -198,6 +245,11 @@ srs_error_t SrsThreadPool::execute(string label, srs_error_t (*start)(void* arg)
     srs_error_t err = srs_success;
 
     SrsThreadEntry* entry = new SrsThreadEntry();
+
+    // Update the hybrid thread entry for circuit breaker.
+    if (label == "hybrid") {
+        hybrid_ = entry;
+    }
 
     // To protect the threads_ for executing thread-safe.
     if (true) {
@@ -247,17 +299,51 @@ srs_error_t SrsThreadPool::run()
     srs_error_t err = srs_success;
 
     while (true) {
+        vector<SrsThreadEntry*> threads;
+        if (true) {
+            SrsThreadLocker(lock_);
+            threads = threads_;
+        }
+
         // Check the threads status fastly.
         int loops = (int)(interval_ / SRS_UTIME_SECONDS);
         for (int i = 0; i < loops; i++) {
-            if (true) {
-                SrsThreadLocker(lock_);
-                for (int i = 0; i < (int)threads_.size(); i++) {
-                    SrsThreadEntry* entry = threads_.at(i);
-                    if (entry->err != srs_success) {
-                        err = srs_error_wrap(entry->err, "thread #%d(%s)", entry->num, entry->label.c_str());
-                        return srs_error_copy(err);
-                    }
+            for (int i = 0; i < (int)threads.size(); i++) {
+                SrsThreadEntry* entry = threads.at(i);
+                if (entry->err != srs_success) {
+                    err = srs_error_wrap(entry->err, "thread #%d(%s)", entry->num, entry->label.c_str());
+                    return srs_error_copy(err);
+                }
+            }
+
+            // For Circuit-Breaker to update the SNMP, ASAP.
+            srs_update_udp_snmp_statistic();
+            _srs_pps_aloss->update();
+
+            // Update thread CPUs per 1s.
+            for (int i = 0; i < (int)threads.size(); i++) {
+                SrsThreadEntry* entry = threads.at(i);
+                if (!entry->tid) {
+                    continue;
+                }
+
+                srs_update_thread_proc_stat(entry->stat, entry->tid);
+            }
+
+            // Update the Circuit-Breaker by water-level.
+            if (hybrid_ && hybrid_->stat) {
+                // Reset the high water-level when CPU is low for N times.
+                if (hybrid_->stat->percent * 100 > high_threshold_) {
+                    hybrid_high_water_level_ = high_pulse_;
+                } else if (hybrid_high_water_level_ > 0) {
+                    hybrid_high_water_level_--;
+                }
+
+                // Reset the critical water-level when CPU is low for N times.
+                if (hybrid_->stat->percent * 100 > critical_threshold_) {
+                    hybrid_critical_water_level_ = critical_pulse_;
+                } else if (hybrid_critical_water_level_ > 0) {
+                    hybrid_critical_water_level_--;
                 }
             }
 
@@ -282,8 +368,38 @@ srs_error_t SrsThreadPool::run()
             sync_desc = buf;
         }
 
-        srs_trace("Thread: %s cycle threads=%d%s%s%s", entry_->name.c_str(), (int)threads_.size(),
-            async_logs.c_str(), sync_desc.c_str(), queue_desc.c_str());
+        // Show statistics for RTC server.
+        SrsProcSelfStat* u = srs_get_self_proc_stat();
+        // Resident Set Size: number of pages the process has in real memory.
+        int memory = (int)(u->rss * 4 / 1024);
+
+        // The hybrid thread cpu and memory.
+        float thread_percent = 0.0f, top_percent = 0.0f;
+        if (hybrid_ && hybrid_->stat) {
+            thread_percent = hybrid_->stat->percent * 100;
+        }
+        for (int i = 0; i < (int)threads.size(); i++) {
+            SrsThreadEntry* entry = threads.at(i);
+            if (!entry->stat || entry->stat->percent <= 0) {
+                continue;
+            }
+            top_percent = srs_max(top_percent, entry->stat->percent * 100);
+        }
+
+        string circuit_breaker;
+        if (hybrid_high_water_level() || hybrid_critical_water_level() || _srs_pps_aloss->r1s() || _srs_pps_rloss->r1s() || _srs_pps_snack2->r10s()) {
+            snprintf(buf, sizeof(buf), ", break=%d,%d, cond=%d,%d,%.2f%%, snk=%d,%d,%d",
+                hybrid_high_water_level(), hybrid_critical_water_level(), // Whether Circuit-Break is enable.
+                _srs_pps_rloss->r1s(), _srs_pps_aloss->r1s(), thread_percent, // The conditions to enable Circuit-Breaker.
+                _srs_pps_snack2->r10s(), _srs_pps_snack3->r10s(), // NACK packet,seqs sent.
+                _srs_pps_snack4->r10s() // NACK drop by Circuit-Break.
+            );
+            circuit_breaker = buf;
+        }
+
+        srs_trace("Process: cpu=%.2f%%,%dMB, threads=%d,%.2f%%,%.2f%%%s%s%s%s",
+            u->percent * 100, memory, (int)threads_.size(), top_percent, thread_percent,
+            async_logs.c_str(), sync_desc.c_str(), queue_desc.c_str(), circuit_breaker.c_str());
     }
 
     return err;
@@ -303,6 +419,9 @@ void* SrsThreadPool::start(void* arg)
 
     SrsThreadEntry* entry = (SrsThreadEntry*)arg;
 
+    // Set the thread local fields.
+    entry->tid = gettid();
+
     int r0 = 0, r1 = 0;
 #ifndef SRS_OSX
     // https://man7.org/linux/man-pages/man3/pthread_setname_np.3.html
@@ -315,8 +434,8 @@ void* SrsThreadPool::start(void* arg)
     pthread_setname_np(entry->name.c_str());
 #endif
 
-    srs_trace("Thread #%d: run with entry=%p, label=%s, name=%s, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64,
-        entry->num, entry, entry->label.c_str(), entry->name.c_str(), entry->cpuset_ok,
+    srs_trace("Thread #%d: run with tid=%d, entry=%p, label=%s, name=%s, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64,
+        entry->num, (int)entry->tid, entry, entry->label.c_str(), entry->name.c_str(), entry->cpuset_ok,
         r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2));
 
     if ((err = entry->start(entry->arg)) != srs_success) {
@@ -931,28 +1050,32 @@ srs_error_t SrsAsyncRecvManager::do_start()
             listeners = listeners_;
         }
 
-        bool got_packet = false;
+        bool got_packets = false;
         for (int i = 0; i < (int)listeners.size(); i++) {
             SrsThreadUdpListener* listener = listeners.at(i);
 
-            // TODO: FIXME: Use st_recvfrom to recv if thread-safe ST is ok.
-            int nread = listener->skt_->raw_recvfrom();
+            for (int j = 0; j < 128; j++) {
+                // TODO: FIXME: Use st_recvfrom to recv if thread-safe ST is ok.
+                int nread = listener->skt_->raw_recvfrom();
+                if (nread <= 0) {
+                    break;
+                }
 
-            // Drop packet if exceed max recv queue size.
-            if ((int)packets_->size() >= max_recv_queue_) {
-                ++_srs_pps_aloss->sugar;
-                continue;
-            }
+                // Drop packet if queue is critical full.
+                int nb_packets = (int)packets_->size();
+                if (nb_packets >= max_recv_queue_) {
+                    ++_srs_pps_aloss->sugar;
+                    continue;
+                }
 
-            // If got packet, copy to the queue.
-            if (nread > 0) {
-                got_packet = true;
+                // If got packet, copy to the queue.
+                got_packets = true;
                 packets_->push_back(listener->skt_->copy());
             }
         }
 
-        // If got packets, maybe more packets in queue.
-        if (got_packet) {
+        // Once there is packets in kernel buffer, we MUST read it ASAP.
+        if (got_packets) {
             continue;
         }
 
@@ -971,7 +1094,7 @@ srs_error_t SrsAsyncRecvManager::consume()
     srs_error_t err = srs_success;
 
     max_recv_queue_ = _srs_config->get_threads_max_recv_queue();
-    srs_trace("AsyncRecv: Set max_queue=%d", max_recv_queue_);
+    srs_trace("AsyncRecv: Set max_queue_size=%d", max_recv_queue_);
 
     if ((err = trd_->start()) != srs_success) {
         return srs_error_wrap(err, "start");
