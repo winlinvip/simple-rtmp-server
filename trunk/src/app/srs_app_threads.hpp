@@ -438,4 +438,44 @@ public:
 // The global async RECV manager.
 extern SrsAsyncRecvManager* _srs_async_recv;
 
+// The async UDP packet.
+class SrsAsyncUdpPacket
+{
+public:
+    SrsUdpMuxSocket* skt_;
+    char* data_;
+    int size_;
+public:
+    SrsAsyncUdpPacket();
+    virtual ~SrsAsyncUdpPacket();
+public:
+    void from(SrsUdpMuxSocket* skt, char* data, int size);
+};
+
+// The async SEND manager, to send UDP packets.
+class SrsAsyncSendManager
+{
+private:
+    // By config.
+    bool enabled_;
+    // The UDP packets to sending.
+    SrsThreadQueue<SrsAsyncUdpPacket>* sending_packets_;
+public:
+    SrsAsyncSendManager();
+    virtual ~SrsAsyncSendManager();
+public:
+    // Whether the async manager is enabled.
+    bool enabled() { return enabled_; }
+    void set_enabled(bool v) { enabled_ = v; }
+    // Send the packet.
+    void add_packet(SrsAsyncUdpPacket* pkt);
+    // Start the thread.
+    static srs_error_t start(void* arg);
+private:
+    srs_error_t do_start();
+};
+
+// The global async SEND manager.
+extern SrsAsyncSendManager* _srs_async_send;
+
 #endif

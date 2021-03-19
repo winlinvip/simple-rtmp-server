@@ -374,6 +374,13 @@ srs_error_t SrsUdpMuxSocket::sendto(void* data, int size, srs_utime_t timeout)
 {
     srs_error_t err = srs_success;
 
+    if (_srs_async_send->enabled()) {
+        SrsAsyncUdpPacket* pkt = new SrsAsyncUdpPacket();
+        pkt->from(this, (char*)data, size);
+        _srs_async_send->add_packet(pkt);
+        return err;
+    }
+
     ++_srs_pps_spkts->sugar;
 
     int nb_write = srs_sendto(lfd, data, size, (sockaddr*)&from, fromlen, timeout);
@@ -394,6 +401,12 @@ srs_error_t SrsUdpMuxSocket::sendto(void* data, int size, srs_utime_t timeout)
     }
 
     return err;
+}
+
+int SrsUdpMuxSocket::raw_sendto(void* data, int size)
+{
+    int osfd = srs_netfd_fileno(lfd);
+    return ::sendto(osfd, data, size, 0, (sockaddr*)&from, (socklen_t)fromlen);
 }
 
 srs_netfd_t SrsUdpMuxSocket::stfd()

@@ -169,6 +169,8 @@ private:
     int on_recvfrom();
 public:
     srs_error_t sendto(void* data, int size, srs_utime_t timeout);
+    int raw_sendto(void* data, int size);
+public:
     srs_netfd_t stfd();
     sockaddr_in* peer_addr();
     socklen_t peer_addrlen();

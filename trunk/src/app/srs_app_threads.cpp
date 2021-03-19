@@ -238,13 +238,15 @@ srs_error_t SrsThreadPool::initialize()
     bool async_srtp = _srs_config->get_threads_async_srtp();
 
     int recv_queue = _srs_config->get_threads_max_recv_queue();
-    srs_trace("AsyncRecv: Set max_queue_size=%d", recv_queue);
     _srs_async_recv->set_max_recv_queue(recv_queue);
 
-    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d, recvQ=%d",
+    bool async_send = _srs_config->get_threads_async_send();
+    _srs_async_send->set_enabled(async_send);
+
+    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d, recvQ=%d, aSend=%d",
         entry->num, entry->label.c_str(), entry->name.c_str(), srsu2msi(interval_), async_srtp,
         entry->cpuset_ok, r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2),
-        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, recv_queue);
+        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, recv_queue, async_send);
 
     return err;
 }
@@ -1224,3 +1226,88 @@ srs_error_t SrsAsyncRecvManager::consume(int* nn_consumed)
 }
 
 SrsAsyncRecvManager* _srs_async_recv = new SrsAsyncRecvManager();
+
+SrsAsyncUdpPacket::SrsAsyncUdpPacket()
+{
+    skt_ = NULL;
+    data_ = NULL;
+    size_ = 0;
+}
+
+SrsAsyncUdpPacket::~SrsAsyncUdpPacket()
+{
+    srs_freep(skt_);
+    srs_freepa(data_);
+}
+
+void SrsAsyncUdpPacket::from(SrsUdpMuxSocket* skt, char* data, int size)
+{
+    skt_ = skt->copy();
+    size_ = size;
+
+    if (size) {
+        data_ = new char[size];
+        memcpy(data_, data, size);
+    }
+}
+
+SrsAsyncSendManager::SrsAsyncSendManager()
+{
+    enabled_ = false;
+    sending_packets_ = new SrsThreadQueue<SrsAsyncUdpPacket>();
+}
+
+SrsAsyncSendManager::~SrsAsyncSendManager()
+{
+    srs_freep(sending_packets_);
+}
+
+void SrsAsyncSendManager::add_packet(SrsAsyncUdpPacket* pkt)
+{
+    sending_packets_->push_back(pkt);
+}
+
+srs_error_t SrsAsyncSendManager::start(void* arg)
+{
+    SrsAsyncSendManager* srtp = (SrsAsyncSendManager*)arg;
+    return srtp->do_start();
+}
+
+srs_error_t SrsAsyncSendManager::do_start()
+{
+    srs_error_t err = srs_success;
+
+    // TODO: FIXME: Config it?
+    srs_utime_t interval = 10 * SRS_UTIME_MILLISECONDS;
+
+    while (true) {
+        vector<SrsAsyncUdpPacket*> flying_sending_packets;
+        sending_packets_->swap(flying_sending_packets);
+
+        for (int i = 0; i < (int)flying_sending_packets.size(); i++) {
+            SrsAsyncUdpPacket* pkt = flying_sending_packets.at(i);
+
+            int r0 = pkt->skt_->raw_sendto(pkt->data_, pkt->size_);
+            if (r0 <= 0) {
+                // Ignore any error.
+            }
+
+            srs_freep(pkt);
+        }
+
+        // Once there are packets to send, we MUST send it ASAP.
+        if (!flying_sending_packets.empty()) {
+            continue;
+        }
+
+        // TODO: FIXME: Maybe we should use cond wait?
+        timespec tv = {0};
+        tv.tv_sec = interval / SRS_UTIME_SECONDS;
+        tv.tv_nsec = (interval % SRS_UTIME_SECONDS) * 1000;
+        nanosleep(&tv, NULL);
+    }
+
+    return err;
+}
+
+SrsAsyncSendManager* _srs_async_send = new SrsAsyncSendManager();
