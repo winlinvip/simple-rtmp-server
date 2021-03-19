@@ -209,6 +209,11 @@ srs_error_t SrsSecurityTransport::on_rtcp_plaintext(char* plaintext, int size)
     return session_->on_rtcp_plaintext(plaintext, size);
 }
 
+srs_error_t SrsSecurityTransport::on_rtp_cipher(char* cipher, int size)
+{
+    return session_->on_rtp_cipher(cipher, size);
+}
+
 srs_error_t SrsSecurityTransport::protect_rtp(void* packet, int* nb_cipher)
 {
     return srtp_->protect_rtp(packet, nb_cipher);
@@ -2053,6 +2058,17 @@ srs_error_t SrsRtcConnection::on_rtcp_plaintext(char* data, int nb_unprotected_b
     return err;
 }
 
+srs_error_t SrsRtcConnection::on_rtp_cipher(char* cipher, int size)
+{
+    srs_error_t err = srs_success;
+
+    if ((err = sendonly_skt->sendto(cipher, size, 0)) != srs_success) {
+        srs_error_reset(err); // Ignore any error.
+    }
+
+    return err;
+}
+
 srs_error_t SrsRtcConnection::dispatch_rtcp(SrsRtcpCommon* rtcp)
 {
     srs_error_t err = srs_success;
@@ -2592,6 +2608,11 @@ srs_error_t SrsRtcConnection::do_send_packet(SrsRtpPacket2* pkt)
         iov->iov_len = (size_t)nn_encrypt;
     }
 
+    // Async SRTP encrypt.
+    if (iov->iov_len <= 0) {
+        return err;
+    }
+
     // For NACK simulator, drop packet.
     if (nn_simulate_player_nack_drop) {
         simulate_player_drop_packet(&pkt->header, (int)iov->iov_len);
@@ -2601,8 +2622,9 @@ srs_error_t SrsRtcConnection::do_send_packet(SrsRtpPacket2* pkt)
 
     ++_srs_pps_srtps->sugar;
 
-    // TODO: FIXME: Handle error.
-    sendonly_skt->sendto(iov->iov_base, iov->iov_len, 0);
+    if ((err = sendonly_skt->sendto(iov->iov_base, iov->iov_len, 0)) != srs_success) {
+        srs_error_reset(err); // Ignore any error.
+    }
 
     // Detail log, should disable it in release version.
     srs_info("RTC: SEND PT=%u, SSRC=%#x, SEQ=%u, Time=%u, %u/%u bytes", pkt->header.get_payload_type(), pkt->header.get_ssrc(),

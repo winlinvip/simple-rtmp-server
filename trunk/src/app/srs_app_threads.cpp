@@ -785,8 +785,23 @@ srs_error_t SrsAsyncSRTP::protect_rtp(void* packet, int* nb_cipher)
         return srs_error_new(ERROR_RTC_SRTP_UNPROTECT, "not ready");
     }
 
-    // TODO: FIMXE: Remove it.
-    return SrsSRTP::protect_rtp(packet, nb_cipher);
+    int nb_plaintext = *nb_cipher;
+
+    // Note that we must allocate more bytes than the size of packet, because SRTP
+    // will write checksum at the end of buffer.
+    char* buf = new char[kRtcpPacketSize];
+    memcpy(buf, packet, nb_plaintext);
+
+    SrsAsyncSRTPPacket* pkt = new SrsAsyncSRTPPacket(task_);
+    pkt->msg_->wrap(buf, nb_plaintext);
+    pkt->is_rtp_ = true;
+    pkt->do_decrypt_ = false;
+    _srs_async_srtp->add_packet(pkt);
+
+    // Do the job asynchronously.
+    *nb_cipher = 0;
+
+    return srs_success;
 }
 
 srs_error_t SrsAsyncSRTP::protect_rtcp(void* packet, int* nb_cipher)
@@ -816,9 +831,7 @@ srs_error_t SrsAsyncSRTP::unprotect_rtp(void* packet, int* nb_plaintext)
     _srs_async_srtp->add_packet(pkt);
 
     // Do the job asynchronously.
-    if (nb_plaintext) {
-        *nb_plaintext = 0;
-    }
+    *nb_plaintext = 0;
 
     return srs_success;
 }
@@ -840,9 +853,7 @@ srs_error_t SrsAsyncSRTP::unprotect_rtcp(void* packet, int* nb_plaintext)
     _srs_async_srtp->add_packet(pkt);
 
     // Do the job asynchronously.
-    if (nb_plaintext) {
-        *nb_plaintext = 0;
-    }
+    *nb_plaintext = 0;
 
     return srs_success;
 }
@@ -896,6 +907,10 @@ srs_error_t SrsAsyncSRTPTask::cook(SrsAsyncSRTPPacket* pkt)
         } else {
             err = impl_->unprotect_rtcp(pkt->msg_->payload, &pkt->nb_consumed_);
         }
+    } else {
+        if (pkt->is_rtp_) {
+            err = impl_->protect_rtp(pkt->msg_->payload, &pkt->nb_consumed_);
+        }
     }
     if (err != srs_success) {
         return err;
@@ -920,6 +935,10 @@ srs_error_t SrsAsyncSRTPTask::consume(SrsAsyncSRTPPacket* pkt)
             err = codec_->transport_->on_rtp_plaintext(payload, pkt->nb_consumed_);
         } else {
             err = codec_->transport_->on_rtcp_plaintext(payload, pkt->nb_consumed_);
+        }
+    } else {
+        if (pkt->is_rtp_) {
+            err = codec_->transport_->on_rtp_cipher(payload, pkt->nb_consumed_);
         }
     }
 
