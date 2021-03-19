@@ -112,7 +112,7 @@ public:
 
 // Allocate a(or almost) fixed thread poll to execute tasks,
 // so that we can take the advantage of multiple CPUs.
-class SrsThreadPool
+class SrsThreadPool : public ISrsCoroutineHandler
 {
 private:
     SrsThreadEntry* entry_;
@@ -133,6 +133,9 @@ private:
     int high_pulse_;
     int critical_threshold_;
     int critical_pulse_;
+private:
+    // A coroutine to consume cooked packets.
+    SrsFastCoroutine* trd_;
 public:
     SrsThreadPool();
     virtual ~SrsThreadPool();
@@ -152,6 +155,11 @@ public:
     void stop();
 private:
     static void* start(void* arg);
+public:
+    // Consume packets. Must call in worker/service thread.
+    virtual srs_error_t consume();
+private:
+    srs_error_t cycle();
 };
 
 // The global thread pool.
@@ -349,7 +357,7 @@ public:
 };
 
 // The async SRTP manager, to start a thread to consume packets.
-class SrsAsyncSRTPManager : public ISrsCoroutineHandler
+class SrsAsyncSRTPManager
 {
 private:
     std::vector<SrsAsyncSRTPTask*> tasks_;
@@ -357,8 +365,6 @@ private:
 private:
     SrsThreadQueue<SrsAsyncSRTPPacket>* srtp_packets_;
 private:
-    // A coroutine to consume cooked packets.
-    SrsFastCoroutine* trd_;
     // The packets cooked by async SRTP manager.
     SrsThreadQueue<SrsAsyncSRTPPacket>* cooked_packets_;
 public:
@@ -375,9 +381,7 @@ private:
     srs_error_t do_start();
 public:
     // Consume cooked SRTP packets. Must call in worker/service thread.
-    virtual srs_error_t consume();
-private:
-    srs_error_t cycle();
+    virtual srs_error_t consume(int* nn_consumed);
 };
 
 // The global async SRTP manager.
@@ -395,13 +399,11 @@ public:
 };
 
 // The async RECV manager, to recv UDP packets.
-class SrsAsyncRecvManager : public ISrsCoroutineHandler
+class SrsAsyncRecvManager
 {
 private:
     ISrsUdpMuxHandler* handler_;
 private:
-    // A coroutine to consume received packets.
-    SrsFastCoroutine* trd_;
     // The received UDP packets.
     SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;
 private:
@@ -416,16 +418,21 @@ public:
 public:
     // Set the handler to process the received UDP packet.
     void set_handler(ISrsUdpMuxHandler* v);
+    // Set the max queue size.
+    // SrsAsyncRecvManager::set_max_recv_queue()
+    void set_max_recv_queue(int v) { max_recv_queue_ =v; }
+    // Add listener to recv from.
     void add_listener(SrsThreadUdpListener* listener);
+    // Get the size of packets queue.
     int size();
+public:
+    // Start the thread.
     static srs_error_t start(void* arg);
 private:
     srs_error_t do_start();
 public:
     // Consume received UDP packets. Must call in worker/service thread.
-    virtual srs_error_t consume();
-private:
-    srs_error_t cycle();
+    virtual srs_error_t consume(int* nn_consumed);
 };
 
 // The global async RECV manager.

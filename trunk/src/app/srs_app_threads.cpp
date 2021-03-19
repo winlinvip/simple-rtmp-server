@@ -148,6 +148,8 @@ SrsThreadPool::SrsThreadPool()
     hybrid_high_water_level_ = 0;
     hybrid_critical_water_level_ = 0;
 
+    trd_ = new SrsFastCoroutine("pool", this);
+
     high_threshold_ = 0;
     high_pulse_ = 0;
     critical_threshold_ = 0;
@@ -174,6 +176,8 @@ SrsThreadPool::SrsThreadPool()
 // TODO: FIMXE: If free the pool, we should stop all threads.
 SrsThreadPool::~SrsThreadPool()
 {
+    srs_freep(trd_);
+
     srs_freep(lock_);
 }
 
@@ -232,10 +236,15 @@ srs_error_t SrsThreadPool::initialize()
     critical_threshold_ = _srs_config->get_critical_threshold();
     critical_pulse_ = _srs_config->get_critical_pulse();
     bool async_srtp = _srs_config->get_threads_async_srtp();
-    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d",
+
+    int recv_queue = _srs_config->get_threads_max_recv_queue();
+    srs_trace("AsyncRecv: Set max_queue_size=%d", recv_queue);
+    _srs_async_recv->set_max_recv_queue(recv_queue);
+
+    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d, recvQ=%d",
         entry->num, entry->label.c_str(), entry->name.c_str(), srsu2msi(interval_), async_srtp,
         entry->cpuset_ok, r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2),
-        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_);
+        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, recv_queue);
 
     return err;
 }
@@ -444,6 +453,49 @@ void* SrsThreadPool::start(void* arg)
 
     // We do not use the return value, the err has been set to entry->err.
     return NULL;
+}
+
+srs_error_t SrsThreadPool::consume()
+{
+    srs_error_t err = srs_success;
+
+    if ((err = trd_->start()) != srs_success) {
+        return srs_error_wrap(err, "start");
+    }
+
+    return err;
+}
+
+srs_error_t SrsThreadPool::cycle()
+{
+    srs_error_t err = srs_success;
+
+    while (true) {
+        int consumed = 0;
+
+        // Check error before consume packets.
+        if ((err = trd_->pull()) != srs_success) {
+            return srs_error_wrap(err, "pull");
+        }
+        if ((err = _srs_async_recv->consume(&consumed)) != srs_success) {
+            srs_error_reset(err); // Ignore any error.
+        }
+
+        // Check error before consume packets.
+        if ((err = trd_->pull()) != srs_success) {
+            return srs_error_wrap(err, "pull");
+        }
+        if ((err = _srs_async_srtp->consume(&consumed)) != srs_success) {
+            srs_error_reset(err); // Ignore any error.
+        }
+
+        if (!consumed) {
+            srs_usleep(20 * SRS_UTIME_MILLISECONDS);
+            continue;
+        }
+    }
+
+    return err;
 }
 
 // TODO: FIXME: It should be thread-local or thread-safe.
@@ -873,14 +925,11 @@ SrsAsyncSRTPManager::SrsAsyncSRTPManager()
     lock_ = new SrsThreadMutex();
     srtp_packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
     cooked_packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
-    trd_ = new SrsFastCoroutine("srtp", this);
 }
 
 // TODO: FIXME: We should stop the thread first, then free the manager.
 SrsAsyncSRTPManager::~SrsAsyncSRTPManager()
 {
-    srs_freep(trd_);
-
     srs_freep(lock_);
     srs_freep(srtp_packets_);
     srs_freep(cooked_packets_);
@@ -975,52 +1024,36 @@ srs_error_t SrsAsyncSRTPManager::do_start()
     return err;
 }
 
-srs_error_t SrsAsyncSRTPManager::consume()
-{
-    srs_error_t err = srs_success;
-
-    if ((err = trd_->start()) != srs_success) {
-        return srs_error_wrap(err, "start");
-    }
-
-    return err;
-}
-
-srs_error_t SrsAsyncSRTPManager::cycle()
+srs_error_t SrsAsyncSRTPManager::consume(int* nn_consumed)
 {
     srs_error_t err = srs_success;
 
     // How many messages to run a yield.
     uint32_t nn_msgs_for_yield = 0;
 
-    while (true) {
-        if ((err = trd_->pull()) != srs_success) {
-            return srs_error_wrap(err, "pull");
+    vector<SrsAsyncSRTPPacket*> flying_cooked_packets;
+    cooked_packets_->swap(flying_cooked_packets);
+
+    if (flying_cooked_packets.empty()) {
+        return err;
+    }
+
+    *nn_consumed += (int)flying_cooked_packets.size();
+
+    for (int i = 0; i < (int)flying_cooked_packets.size(); i++) {
+        SrsAsyncSRTPPacket* pkt = flying_cooked_packets.at(i);
+
+        if ((err = pkt->task_->consume(pkt)) != srs_success) {
+            srs_error_reset(err);
         }
 
-        vector<SrsAsyncSRTPPacket*> flying_cooked_packets;
-        cooked_packets_->swap(flying_cooked_packets);
+        srs_freep(pkt);
 
-        if (flying_cooked_packets.empty()) {
-            srs_usleep(20 * SRS_UTIME_MILLISECONDS);
-            continue;
-        }
-
-        for (int i = 0; i < (int)flying_cooked_packets.size(); i++) {
-            SrsAsyncSRTPPacket* pkt = flying_cooked_packets.at(i);
-
-            if ((err = pkt->task_->consume(pkt)) != srs_success) {
-                srs_error_reset(err);
-            }
-
-            srs_freep(pkt);
-
-            // Yield to another coroutines.
-            // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
-            if (++nn_msgs_for_yield > 10) {
-                nn_msgs_for_yield = 0;
-                srs_thread_yield();
-            }
+        // Yield to another coroutines.
+        // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
+        if (++nn_msgs_for_yield > 10) {
+            nn_msgs_for_yield = 0;
+            srs_thread_yield();
         }
     }
 
@@ -1044,14 +1077,11 @@ SrsAsyncRecvManager::SrsAsyncRecvManager()
     received_packets_ = new SrsThreadQueue<SrsUdpMuxSocket>();
     handler_ = NULL;
     max_recv_queue_ = 0;
-    trd_ = new SrsFastCoroutine("recv", this);
 }
 
 // TODO: FIXME: We should stop the thread first, then free the manager.
 SrsAsyncRecvManager::~SrsAsyncRecvManager()
 {
-    srs_freep(trd_);
-
     srs_freep(lock_);
     srs_freep(received_packets_);
 
@@ -1137,55 +1167,36 @@ srs_error_t SrsAsyncRecvManager::do_start()
     return err;
 }
 
-srs_error_t SrsAsyncRecvManager::consume()
-{
-    srs_error_t err = srs_success;
-
-    max_recv_queue_ = _srs_config->get_threads_max_recv_queue();
-    srs_trace("AsyncRecv: Set max_queue_size=%d", max_recv_queue_);
-
-    if ((err = trd_->start()) != srs_success) {
-        return srs_error_wrap(err, "start");
-    }
-
-    return err;
-}
-
-srs_error_t SrsAsyncRecvManager::cycle()
+srs_error_t SrsAsyncRecvManager::consume(int* nn_consumed)
 {
     srs_error_t err = srs_success;
 
     // How many messages to run a yield.
     uint32_t nn_msgs_for_yield = 0;
 
-    while (true) {
-        if ((err = trd_->pull()) != srs_success) {
-            return srs_error_wrap(err, "pull");
+    vector<SrsUdpMuxSocket*> flying_received_packets;
+    received_packets_->swap(flying_received_packets);
+
+    if (flying_received_packets.empty()) {
+        return err;
+    }
+
+    *nn_consumed += (int)flying_received_packets.size();
+
+    for (int i = 0; i < (int)flying_received_packets.size(); i++) {
+        SrsUdpMuxSocket* pkt = flying_received_packets.at(i);
+
+        if (handler_ && (err = handler_->on_udp_packet(pkt)) != srs_success) {
+            srs_error_reset(err); // Ignore any error.
         }
 
-        vector<SrsUdpMuxSocket*> flying_received_packets;
-        received_packets_->swap(flying_received_packets);
+        srs_freep(pkt);
 
-        if (flying_received_packets.empty()) {
-            srs_usleep(20 * SRS_UTIME_MILLISECONDS);
-            continue;
-        }
-
-        for (int i = 0; i < (int)flying_received_packets.size(); i++) {
-            SrsUdpMuxSocket* pkt = flying_received_packets.at(i);
-
-            if (handler_ && (err = handler_->on_udp_packet(pkt)) != srs_success) {
-                srs_error_reset(err); // Ignore any error.
-            }
-
-            srs_freep(pkt);
-
-            // Yield to another coroutines.
-            // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
-            if (++nn_msgs_for_yield > 10) {
-                nn_msgs_for_yield = 0;
-                srs_thread_yield();
-            }
+        // Yield to another coroutines.
+        // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
+        if (++nn_msgs_for_yield > 10) {
+            nn_msgs_for_yield = 0;
+            srs_thread_yield();
         }
     }
 

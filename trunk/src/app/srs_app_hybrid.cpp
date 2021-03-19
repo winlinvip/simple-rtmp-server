@@ -183,14 +183,10 @@ srs_error_t SrsHybridServer::initialize()
     // A monitor to check the clock wall deviation, per clock tick.
     timer_->subscribe(20 * SRS_UTIME_MILLISECONDS, clock_monitor_);
 
-    // Consume the async cooked SRTP packets.
-    if ((err = _srs_async_srtp->consume()) != srs_success) {
+    // Consume the async UDP/SRTP packets.
+    if ((err = _srs_thread_pool->consume()) != srs_success) {
         return srs_error_wrap(err, "srtp");
     }
-
-    // Consume the async received UDP packets.
-    if ((err = _srs_async_recv->consume()) != srs_success) {
-        return srs_error_wrap(err, "recv");
     }
 
     vector<ISrsHybridServer*>::iterator it;
