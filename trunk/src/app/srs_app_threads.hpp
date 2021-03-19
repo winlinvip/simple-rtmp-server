@@ -240,7 +240,7 @@ private:
     SrsFileWriter* writer_;
 private:
     // The thread-queue, to flush to disk by dedicated thread.
-    SrsThreadQueue<SrsSharedPtrMessage>* queue_;
+    SrsThreadQueue<SrsSharedPtrMessage>* chunks_;
 private:
     SrsAsyncFileWriter(std::string p);
     virtual ~SrsAsyncFileWriter();
@@ -298,7 +298,8 @@ extern SrsAsyncLogManager* _srs_async_log;
 // The async SRTP codec.
 class SrsAsyncSRTP : public SrsSRTP
 {
-public:
+    friend class SrsAsyncSRTPTask;
+private:
     SrsAsyncSRTPTask* task_;
     SrsSecurityTransport* transport_;
 public:
@@ -316,16 +317,20 @@ public:
 // which alive longer than either SrsAsyncSRTPTask or SrsAsyncSRTP.
 class SrsAsyncSRTPTask
 {
-public:
+private:
     SrsAsyncSRTP* codec_;
     SrsSRTP* impl_;
+    // For disposing, only set a flag, free it in future.
+    int disposing_;
 public:
     SrsAsyncSRTPTask(SrsAsyncSRTP* codec);
     virtual ~SrsAsyncSRTPTask();
 public:
     srs_error_t initialize(std::string recv_key, std::string send_key);
+    void dispose();
 public:
     srs_error_t cook(SrsAsyncSRTPPacket* pkt);
+    srs_error_t consume(SrsAsyncSRTPPacket* pkt);
 };
 
 // The async SRTP packet, handle by task.
@@ -350,7 +355,7 @@ private:
     std::vector<SrsAsyncSRTPTask*> tasks_;
     SrsThreadMutex* lock_;
 private:
-    SrsThreadQueue<SrsAsyncSRTPPacket>* packets_;
+    SrsThreadQueue<SrsAsyncSRTPPacket>* srtp_packets_;
 private:
     // A coroutine to consume cooked packets.
     SrsFastCoroutine* trd_;
@@ -361,7 +366,7 @@ public:
     virtual ~SrsAsyncSRTPManager();
 public:
     void register_task(SrsAsyncSRTPTask* task);
-    void remove_task(SrsAsyncSRTPTask* task);
+    void on_srtp_codec_destroy(SrsAsyncSRTPTask* task);
     void add_packet(SrsAsyncSRTPPacket* pkt);
     int size();
     int cooked_size();
@@ -398,7 +403,7 @@ private:
     // A coroutine to consume received packets.
     SrsFastCoroutine* trd_;
     // The received UDP packets.
-    SrsThreadQueue<SrsUdpMuxSocket>* packets_;
+    SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;
 private:
     // If exceed max queue, drop packet.
     int max_recv_queue_;
