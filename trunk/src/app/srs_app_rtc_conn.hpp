@@ -144,6 +144,7 @@ private:
     srs_error_t srtp_initialize();
 public:
     srs_error_t on_rtp_plaintext(char* plaintext, int size);
+    srs_error_t on_rtcp_plaintext(char* plaintext, int size);
 };
 
 // Semi security transport, setup DTLS and SRTP, with SRTP decrypt, without SRTP encrypt.
@@ -493,6 +494,8 @@ private:
     srs_error_t find_publisher(char* buf, int size, SrsRtcPublishStream** ppublisher);
 public:
     srs_error_t on_rtcp(char* data, int nb_data);
+private:
+    srs_error_t on_rtcp_plaintext(char* plaintext, int size);
 private:
     srs_error_t dispatch_rtcp(SrsRtcpCommon* rtcp);
 public:

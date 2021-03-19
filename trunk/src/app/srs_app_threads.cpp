@@ -814,7 +814,9 @@ srs_error_t SrsAsyncSRTP::unprotect_rtp(void* packet, int* nb_plaintext)
     _srs_async_srtp->add_packet(pkt);
 
     // Do the job asynchronously.
-    *nb_plaintext = 0;
+    if (nb_plaintext) {
+        *nb_plaintext = 0;
+    }
 
     return srs_success;
 }
@@ -825,8 +827,22 @@ srs_error_t SrsAsyncSRTP::unprotect_rtcp(void* packet, int* nb_plaintext)
         return srs_error_new(ERROR_RTC_SRTP_UNPROTECT, "not ready");
     }
 
-    // TODO: FIMXE: Remove it.
-    return SrsSRTP::unprotect_rtcp(packet, nb_plaintext);
+    int nb_cipher = *nb_plaintext;
+    char* buf = new char[nb_cipher];
+    memcpy(buf, packet, nb_cipher);
+
+    SrsAsyncSRTPPacket* pkt = new SrsAsyncSRTPPacket(task_);
+    pkt->msg_->wrap(buf, nb_cipher);
+    pkt->is_rtp_ = false;
+    pkt->do_decrypt_ = true;
+    _srs_async_srtp->add_packet(pkt);
+
+    // Do the job asynchronously.
+    if (nb_plaintext) {
+        *nb_plaintext = 0;
+    }
+
+    return srs_success;
 }
 
 SrsAsyncSRTPTask::SrsAsyncSRTPTask(SrsAsyncSRTP* codec)
@@ -871,10 +887,12 @@ srs_error_t SrsAsyncSRTPTask::cook(SrsAsyncSRTPPacket* pkt)
         return err;
     }
 
+    pkt->nb_consumed_ = pkt->msg_->size;
     if (pkt->do_decrypt_) {
         if (pkt->is_rtp_) {
-            pkt->nb_consumed_ = pkt->msg_->size;
             err = impl_->unprotect_rtp(pkt->msg_->payload, &pkt->nb_consumed_);
+        } else {
+            err = impl_->unprotect_rtcp(pkt->msg_->payload, &pkt->nb_consumed_);
         }
     }
     if (err != srs_success) {
@@ -898,6 +916,8 @@ srs_error_t SrsAsyncSRTPTask::consume(SrsAsyncSRTPPacket* pkt)
     if (pkt->do_decrypt_) {
         if (pkt->is_rtp_) {
             err = codec_->transport_->on_rtp_plaintext(payload, pkt->nb_consumed_);
+        } else {
+            err = codec_->transport_->on_rtcp_plaintext(payload, pkt->nb_consumed_);
         }
     }
 

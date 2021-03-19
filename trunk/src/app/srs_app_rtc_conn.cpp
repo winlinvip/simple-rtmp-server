@@ -204,6 +204,11 @@ srs_error_t SrsSecurityTransport::on_rtp_plaintext(char* plaintext, int size)
     return session_->on_rtp_plaintext(plaintext, size);
 }
 
+srs_error_t SrsSecurityTransport::on_rtcp_plaintext(char* plaintext, int size)
+{
+    return session_->on_rtcp_plaintext(plaintext, size);
+}
+
 srs_error_t SrsSecurityTransport::protect_rtp(void* packet, int* nb_cipher)
 {
     return srtp_->protect_rtp(packet, nb_cipher);
@@ -2001,6 +2006,23 @@ srs_error_t SrsRtcConnection::on_rtcp(char* data, int nb_data)
         return srs_error_wrap(err, "rtcp unprotect");
     }
 
+    // For async SRTP, the nb_unprotected_buf might be zero, which means we do not got the plaintext
+    // right now, and it will callback if get one.
+    if (nb_unprotected_buf == 0) {
+        return err;
+    }
+
+    if ((err = on_rtcp_plaintext(data, nb_unprotected_buf)) != srs_success) {
+        return srs_error_wrap(err, "cipher=%d", nb_data);
+    }
+
+    return err;
+}
+
+srs_error_t SrsRtcConnection::on_rtcp_plaintext(char* data, int nb_unprotected_buf)
+{
+    srs_error_t err = srs_success;
+
     char* unprotected_buf = data;
     if (_srs_blackhole->blackhole) {
         _srs_blackhole->sendto(unprotected_buf, nb_unprotected_buf);
@@ -2022,7 +2044,7 @@ srs_error_t SrsRtcConnection::on_rtcp(char* data, int nb_data)
         SrsAutoFree(SrsRtcpCommon, rtcp);
 
         if(srs_success != err) {
-            return srs_error_wrap(err, "cipher=%u, plaintext=%u, bytes=[%s], rtcp=(%u,%u,%u,%u)", nb_data, nb_unprotected_buf,
+            return srs_error_wrap(err, "plaintext=%u, bytes=[%s], rtcp=(%u,%u,%u,%u)", nb_unprotected_buf,
                 srs_string_dumps_hex(rtcp->data(), rtcp->size(), rtcp->size()).c_str(),
                 rtcp->get_rc(), rtcp->type(), rtcp->get_ssrc(), rtcp->size());
         }
