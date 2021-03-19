@@ -54,7 +54,7 @@ SrsPps* _srs_pps_fast_addrs = new SrsPps();
 SrsPps* _srs_pps_spkts = new SrsPps();
 
 // set the max packet size.
-#define SRS_UDP_MAX_PACKET_SIZE 65535
+const int SRS_UDP_MAX_PACKET_SIZE = 1500;
 
 // sleep in srs_utime_t for udp recv packet.
 #define SrsUdpPacketRecvCycleInterval 0
