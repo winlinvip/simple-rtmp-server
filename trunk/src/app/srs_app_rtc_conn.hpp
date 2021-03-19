@@ -146,6 +146,7 @@ public:
     srs_error_t on_rtp_plaintext(char* plaintext, int size);
     srs_error_t on_rtcp_plaintext(char* plaintext, int size);
     srs_error_t on_rtp_cipher(char* cipher, int size);
+    srs_error_t on_rtcp_cipher(char* cipher, int size);
 };
 
 // Semi security transport, setup DTLS and SRTP, with SRTP decrypt, without SRTP encrypt.
@@ -499,6 +500,7 @@ private:
     srs_error_t on_rtcp_plaintext(char* plaintext, int size);
 private:
     srs_error_t on_rtp_cipher(char* cipher, int size);
+    srs_error_t on_rtcp_cipher(char* cipher, int size);
 private:
     srs_error_t dispatch_rtcp(SrsRtcpCommon* rtcp);
 public:

@@ -214,6 +214,11 @@ srs_error_t SrsSecurityTransport::on_rtp_cipher(char* cipher, int size)
     return session_->on_rtp_cipher(cipher, size);
 }
 
+srs_error_t SrsSecurityTransport::on_rtcp_cipher(char* cipher, int size)
+{
+    return session_->on_rtcp_cipher(cipher, size);
+}
+
 srs_error_t SrsSecurityTransport::protect_rtp(void* packet, int* nb_cipher)
 {
     return srtp_->protect_rtp(packet, nb_cipher);
@@ -2069,6 +2074,17 @@ srs_error_t SrsRtcConnection::on_rtp_cipher(char* cipher, int size)
     return err;
 }
 
+srs_error_t SrsRtcConnection::on_rtcp_cipher(char* cipher, int size)
+{
+    srs_error_t err = srs_success;
+
+    if ((err = sendonly_skt->sendto(cipher, size, 0)) != srs_success) {
+        srs_error_reset(err); // Ignore any error.
+    }
+
+    return err;
+}
+
 srs_error_t SrsRtcConnection::dispatch_rtcp(SrsRtcpCommon* rtcp)
 {
     srs_error_t err = srs_success;
@@ -2418,11 +2434,12 @@ srs_error_t SrsRtcConnection::send_rtcp(char *data, int nb_data)
         return srs_error_wrap(err, "protect rtcp");
     }
 
-    if ((err = sendonly_skt->sendto(data, nb_buf, 0)) != srs_success) {
-        return srs_error_wrap(err, "send");
+    // Async SRTP encrypt.
+    if (nb_buf <= 0) {
+        return err;
     }
 
-    return err;
+    return on_rtcp_cipher(data, nb_buf);
 }
 
 void SrsRtcConnection::check_send_nacks(SrsRtpNackForReceiver* nack, uint32_t ssrc, uint32_t& sent_nacks, uint32_t& timeout_nacks)
@@ -2622,15 +2639,11 @@ srs_error_t SrsRtcConnection::do_send_packet(SrsRtpPacket2* pkt)
 
     ++_srs_pps_srtps->sugar;
 
-    if ((err = sendonly_skt->sendto(iov->iov_base, iov->iov_len, 0)) != srs_success) {
-        srs_error_reset(err); // Ignore any error.
-    }
-
     // Detail log, should disable it in release version.
     srs_info("RTC: SEND PT=%u, SSRC=%#x, SEQ=%u, Time=%u, %u/%u bytes", pkt->header.get_payload_type(), pkt->header.get_ssrc(),
         pkt->header.get_sequence(), pkt->header.get_timestamp(), pkt->nb_bytes(), iov->iov_len);
 
-    return err;
+    return on_rtp_cipher((char*)iov->iov_base, iov->iov_len);
 }
 
 void SrsRtcConnection::set_all_tracks_status(std::string stream_uri, bool is_publish, bool status)
