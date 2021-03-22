@@ -394,15 +394,13 @@ class SrsThreadUdpListener
 public:
     SrsUdpMuxSocket* skt_;
 public:
-    SrsThreadUdpListener(srs_netfd_t fd);
+    SrsThreadUdpListener(srs_netfd_t fd, ISrsUdpMuxHandler* handler);
     virtual ~SrsThreadUdpListener();
 };
 
 // The async RECV manager, to recv UDP packets.
 class SrsAsyncRecvManager
 {
-private:
-    ISrsUdpMuxHandler* handler_;
 private:
     // The received UDP packets.
     SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;
@@ -416,8 +414,6 @@ public:
     SrsAsyncRecvManager();
     virtual ~SrsAsyncRecvManager();
 public:
-    // Set the handler to process the received UDP packet.
-    void set_handler(ISrsUdpMuxHandler* v);
     // Set the max queue size.
     // SrsAsyncRecvManager::set_max_recv_queue()
     void set_max_recv_queue(int v) { max_recv_queue_ =v; }

@@ -1122,9 +1122,10 @@ srs_error_t SrsAsyncSRTPManager::consume(int* nn_consumed)
 
 SrsAsyncSRTPManager* _srs_async_srtp = new SrsAsyncSRTPManager();
 
-SrsThreadUdpListener::SrsThreadUdpListener(srs_netfd_t fd)
+SrsThreadUdpListener::SrsThreadUdpListener(srs_netfd_t fd, ISrsUdpMuxHandler* handler)
 {
     skt_ = new SrsUdpMuxSocket(fd);
+    skt_->set_handler(handler);
 }
 
 SrsThreadUdpListener::~SrsThreadUdpListener()
@@ -1135,7 +1136,6 @@ SrsAsyncRecvManager::SrsAsyncRecvManager()
 {
     lock_ = new SrsThreadMutex();
     received_packets_ = new SrsThreadQueue<SrsUdpMuxSocket>();
-    handler_ = NULL;
     max_recv_queue_ = 0;
 }
 
@@ -1150,11 +1150,6 @@ SrsAsyncRecvManager::~SrsAsyncRecvManager()
         SrsThreadUdpListener* listener = *it;
         srs_freep(listener);
     }
-}
-
-void SrsAsyncRecvManager::set_handler(ISrsUdpMuxHandler* v)
-{
-    handler_ = v;
 }
 
 void SrsAsyncRecvManager::add_listener(SrsThreadUdpListener* listener)
@@ -1246,7 +1241,8 @@ srs_error_t SrsAsyncRecvManager::consume(int* nn_consumed)
     for (int i = 0; i < (int)flying_received_packets.size(); i++) {
         SrsUdpMuxSocket* pkt = flying_received_packets.at(i);
 
-        if (handler_ && (err = handler_->on_udp_packet(pkt)) != srs_success) {
+        ISrsUdpMuxHandler* handler = pkt->handler();
+        if (handler && (err = handler->on_udp_packet(pkt)) != srs_success) {
             srs_error_reset(err); // Ignore any error.
         }
 

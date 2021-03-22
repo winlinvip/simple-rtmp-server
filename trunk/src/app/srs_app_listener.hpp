@@ -162,6 +162,13 @@ private:
 public:
     SrsUdpMuxSocket(srs_netfd_t fd);
     virtual ~SrsUdpMuxSocket();
+private:
+    ISrsUdpMuxHandler* handler_;
+public:
+    // SrsUdpMuxSocket::set_handler
+    void set_handler(ISrsUdpMuxHandler* h) { handler_ = h; }
+    // SrsUdpMuxSocket::handler
+    ISrsUdpMuxHandler* handler() { return handler_; }
 public:
     int recvfrom(srs_utime_t timeout);
     int raw_recvfrom();

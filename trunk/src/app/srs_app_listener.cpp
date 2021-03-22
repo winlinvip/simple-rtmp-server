@@ -302,6 +302,7 @@ SrsUdpMuxSocket::SrsUdpMuxSocket(srs_netfd_t fd)
     nread = 0;
 
     lfd = fd;
+    handler_ = NULL;
 
     fromlen = 0;
     peer_port = 0;
@@ -524,6 +525,8 @@ SrsUdpMuxSocket* SrsUdpMuxSocket::copy_sendonly()
     sendonly->fast_id_ = fast_id_;
     sendonly->address_changed_ = address_changed_;
 
+    sendonly->handler_ = handler_;
+
     return sendonly;
 }
 
@@ -546,6 +549,8 @@ SrsUdpMuxSocket* SrsUdpMuxSocket::copy()
     cp->peer_id_ = peer_id_;
     cp->fast_id_ = fast_id_;
     cp->address_changed_ = address_changed_;
+
+    cp->handler_ = handler_;
 
     return cp;
 }
@@ -659,13 +664,10 @@ srs_error_t SrsUdpMuxListener::cycle()
 
     // Sleep infinite if use async_recv.
     if (_srs_config->get_threads_async_recv()) {
-        SrsThreadUdpListener* listener = new SrsThreadUdpListener(lfd);
-
+        SrsThreadUdpListener* listener = new SrsThreadUdpListener(lfd, handler);
         _srs_async_recv->add_listener(listener);
-        _srs_async_recv->set_handler(handler);
 
         srs_usleep(SRS_UTIME_NO_TIMEOUT);
-
         return trd->pull();
     }
 
