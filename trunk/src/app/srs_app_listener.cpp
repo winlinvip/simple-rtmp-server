@@ -550,6 +550,12 @@ SrsUdpMuxSocket* SrsUdpMuxSocket::copy()
     cp->fast_id_ = fast_id_;
     cp->address_changed_ = address_changed_;
 
+    if (nread) {
+        // Reset the fast cache buffer size.
+        cp->cache_buffer_->set_size(nread);
+        cp->cache_buffer_->skip(-1 * cache_buffer_->pos());
+    }
+
     cp->handler_ = handler_;
 
     return cp;
