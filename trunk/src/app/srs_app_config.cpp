@@ -4321,6 +4321,40 @@ int SrsConfig::get_critical_pulse()
     return ::atoi(conf->arg0().c_str());
 }
 
+int SrsConfig::get_dying_threshold()
+{
+    static int DEFAULT = 99;
+
+    SrsConfDirective* conf = root->get("circuit_breaker");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("dying_threshold");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    return ::atoi(conf->arg0().c_str());
+}
+
+int SrsConfig::get_dying_pulse()
+{
+    static int DEFAULT = 5;
+
+    SrsConfDirective* conf = root->get("circuit_breaker");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("dying_pulse");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    return ::atoi(conf->arg0().c_str());
+}
+
 vector<SrsConfDirective*> SrsConfig::get_stream_casters()
 {
     srs_assert(root);

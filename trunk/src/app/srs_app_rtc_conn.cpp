@@ -315,7 +315,7 @@ srs_error_t SrsPlaintextTransport::on_dtls_alert(std::string type, std::string d
 
 srs_error_t SrsPlaintextTransport::on_dtls_handshake_done()
 {
-    srs_trace("RTC: DTLS handshake done.");
+    srs_trace("RTC: DTLS plaintext handshake done.");
     return session_->on_connection_established();
 }
 
@@ -650,6 +650,9 @@ srs_error_t SrsRtcPlayStream::cycle()
         }
     }
 
+    // How many messages to run a yield.
+    uint32_t nn_msgs_for_yield = 0;
+
     while (true) {
         if ((err = trd_->pull()) != srs_success) {
             return srs_error_wrap(err, "rtc sender thread");
@@ -677,6 +680,13 @@ srs_error_t SrsRtcPlayStream::cycle()
         // Release the packet to cache.
         // @remark Note that the pkt might be set to NULL.
         _srs_rtp_cache->recycle(pkt);
+
+        // Yield to another coroutines.
+        // @see https://github.com/ossrs/srs/issues/2194#issuecomment-777485531
+        if (++nn_msgs_for_yield > 10) {
+            nn_msgs_for_yield = 0;
+            srs_thread_yield();
+        }
     }
 }
 

@@ -488,6 +488,8 @@ public:
     virtual int get_high_pulse();
     virtual int get_critical_threshold();
     virtual int get_critical_pulse();
+    virtual int get_dying_threshold();
+    virtual int get_dying_pulse();
 // stream_caster section
 public:
     // Get all stream_caster in config file.

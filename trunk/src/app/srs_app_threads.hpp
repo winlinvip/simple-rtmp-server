@@ -127,12 +127,15 @@ private:
     // @note To avoid the CPU change rapidly.
     int hybrid_high_water_level_;
     int hybrid_critical_water_level_;
+    int hybrid_dying_water_level_;
 private:
     // The config for high/critical water level.
     int high_threshold_;
     int high_pulse_;
     int critical_threshold_;
     int critical_pulse_;
+    int dying_threshold_;
+    int dying_pulse_;
 private:
     // A coroutine to consume cooked packets.
     SrsFastCoroutine* trd_;
@@ -143,6 +146,7 @@ public:
     // Whether hybrid server water-level is high.
     bool hybrid_high_water_level();
     bool hybrid_critical_water_level();
+    bool hybrid_dying_water_level();
     // Setup the thread-local variables.
     static void setup();
     // Initialize the thread pool.
