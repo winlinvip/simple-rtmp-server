@@ -35,6 +35,7 @@
 #include <srs_app_st.hpp>
 
 class SrsRequest;
+class SrsUdpMuxSocket;
 
 class SrsDtlsCertificate
 {
@@ -245,6 +246,8 @@ public:
     virtual srs_error_t protect_rtcp(void* packet, int* nb_cipher);
     virtual srs_error_t unprotect_rtp(void* packet, int* nb_plaintext);
     virtual srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext);
+public:
+    virtual void dig_tunnel(SrsUdpMuxSocket* skt);
 };
 
 #endif

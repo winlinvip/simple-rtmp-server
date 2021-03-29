@@ -90,6 +90,10 @@ ISrsRtcTransport::~ISrsRtcTransport()
 {
 }
 
+void ISrsRtcTransport::dig_tunnel(SrsUdpMuxSocket* skt)
+{
+}
+
 SrsSecurityTransport::SrsSecurityTransport(SrsRtcConnection* s)
 {
     session_ = s;
@@ -201,21 +205,37 @@ srs_error_t SrsSecurityTransport::srtp_initialize()
 
 srs_error_t SrsSecurityTransport::on_rtp_plaintext(char* plaintext, int size)
 {
+    // We should keep alive here, because when tunnel is enabled, the connection die
+    // for the SrsRtcServer::on_udp_packet might be skipped.
+    session_->alive();
+
     return session_->on_rtp_plaintext(plaintext, size);
 }
 
 srs_error_t SrsSecurityTransport::on_rtcp_plaintext(char* plaintext, int size)
 {
+    // We should keep alive here, because when tunnel is enabled, the connection die
+    // for the SrsRtcServer::on_udp_packet might be skipped.
+    session_->alive();
+
     return session_->on_rtcp_plaintext(plaintext, size);
 }
 
 srs_error_t SrsSecurityTransport::on_rtp_cipher(char* cipher, int size)
 {
+    // We should keep alive here, because when tunnel is enabled, the connection die
+    // for the SrsRtcServer::on_udp_packet might be skipped.
+    session_->alive();
+
     return session_->on_rtp_cipher(cipher, size);
 }
 
 srs_error_t SrsSecurityTransport::on_rtcp_cipher(char* cipher, int size)
 {
+    // We should keep alive here, because when tunnel is enabled, the connection die
+    // for the SrsRtcServer::on_udp_packet might be skipped.
+    session_->alive();
+
     return session_->on_rtcp_cipher(cipher, size);
 }
 
@@ -237,6 +257,13 @@ srs_error_t SrsSecurityTransport::unprotect_rtp(void* packet, int* nb_plaintext)
 srs_error_t SrsSecurityTransport::unprotect_rtcp(void* packet, int* nb_plaintext)
 {
     return srtp_->unprotect_rtcp(packet, nb_plaintext);
+}
+
+void SrsSecurityTransport::dig_tunnel(SrsUdpMuxSocket* skt)
+{
+    if (srtp_) {
+        srtp_->dig_tunnel(skt);
+    }
 }
 
 SrsSemiSecurityTransport::SrsSemiSecurityTransport(SrsRtcConnection* s) : SrsSecurityTransport(s)
@@ -1830,6 +1857,13 @@ vector<SrsUdpMuxSocket*> SrsRtcConnection::peer_addresses()
     }
 
     return addresses;
+}
+
+void SrsRtcConnection::dig_tunnel(SrsUdpMuxSocket* skt)
+{
+    if (transport_) {
+        transport_->dig_tunnel(skt);
+    }
 }
 
 const SrsContextId& SrsRtcConnection::get_id()

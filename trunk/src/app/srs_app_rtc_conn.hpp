@@ -107,6 +107,10 @@ public:
     // The nb_plaintext should be initialized to the size of cipher.
     virtual srs_error_t unprotect_rtp(void* packet, int* nb_plaintext) = 0;
     virtual srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext) = 0;
+public:
+    // Try to dig the recv tunnel, for srtp thread to consume packets from recv
+    // threads directly without proxying by hybrid thread.
+    virtual void dig_tunnel(SrsUdpMuxSocket* skt);
 };
 
 // The security transport, use DTLS/SRTP to protect the data.
@@ -147,6 +151,8 @@ public:
     srs_error_t on_rtcp_plaintext(char* plaintext, int size);
     srs_error_t on_rtp_cipher(char* cipher, int size);
     srs_error_t on_rtcp_cipher(char* cipher, int size);
+public:
+    void dig_tunnel(SrsUdpMuxSocket* skt);
 };
 
 // Semi security transport, setup DTLS and SRTP, with SRTP decrypt, without SRTP encrypt.
@@ -473,6 +479,8 @@ public:
     std::string username();
     // Get all addresses client used.
     std::vector<SrsUdpMuxSocket*> peer_addresses();
+public:
+    void dig_tunnel(SrsUdpMuxSocket* skt);
 // Interface ISrsResource.
 public:
     virtual const SrsContextId& get_id();

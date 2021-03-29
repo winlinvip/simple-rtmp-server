@@ -91,6 +91,8 @@ private:
     std::vector<SrsUdpMuxListener*> listeners;
     ISrsRtcServerHandler* handler;
     ISrsRtcServerHijacker* hijacker;
+private:
+    bool async_tunnel_;
 public:
     SrsRtcServer();
     virtual ~SrsRtcServer();

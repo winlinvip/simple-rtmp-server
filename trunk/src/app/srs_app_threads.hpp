@@ -319,6 +319,8 @@ public:
     srs_error_t protect_rtcp(void* packet, int* nb_cipher);
     srs_error_t unprotect_rtp(void* packet, int* nb_plaintext);
     srs_error_t unprotect_rtcp(void* packet, int* nb_plaintext);
+public:
+    void dig_tunnel(SrsUdpMuxSocket* skt);
 };
 
 // The async SRTP task, bind to the codec, managed by SrsAsyncSRTPManager,
@@ -398,15 +400,37 @@ public:
     virtual ~SrsThreadUdpListener();
 };
 
+// The tunnel for recv to directly consume packets to SRTP decrypt.
+class SrsRecvTunnels
+{
+private:
+    // The tunnel for recv to directly consume packets to SRTP decrypt.
+    // Key is fast_id of UDP packet, value is SRTP task.
+    std::map<uint64_t, SrsAsyncSRTPTask*> tunnels_;
+    SrsThreadMutex* lock_;
+public:
+    SrsRecvTunnels();
+    virtual ~SrsRecvTunnels();
+public:
+    // Dig a tunnel for recv thread.
+    void dig_tunnel(uint64_t fast_id, SrsAsyncSRTPTask* task);
+    // Get the SRTP task to handle packet.
+    SrsAsyncSRTPTask* find(uint64_t fast_id);
+};
+
 // The async RECV manager, to recv UDP packets.
 class SrsAsyncRecvManager
 {
 private:
     // The received UDP packets.
     SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;
+    // The tunnel for recv to directly consume packets to SRTP decrypt.
+    SrsRecvTunnels* tunnels_;
 private:
     // If exceed max queue, drop packet.
     int max_recv_queue_;
+    // Whether enabled tunnel.
+    bool tunnel_enabled_;
 private:
     std::vector<SrsThreadUdpListener*> listeners_;
     SrsThreadMutex* lock_;
@@ -414,6 +438,12 @@ public:
     SrsAsyncRecvManager();
     virtual ~SrsAsyncRecvManager();
 public:
+    // Get the recv tunnels.
+    // SrsAsyncRecvManager::tunnels()
+    SrsRecvTunnels* tunnels() { return tunnels_; }
+    // Enable or disable the tunnel.
+    // SrsAsyncRecvManager::set_tunnel_enabled()
+    void set_tunnel_enabled(bool v) { tunnel_enabled_ = v; }
     // Set the max queue size.
     // SrsAsyncRecvManager::set_max_recv_queue()
     void set_max_recv_queue(int v) { max_recv_queue_ =v; }
@@ -429,6 +459,9 @@ private:
 public:
     // Consume received UDP packets. Must call in worker/service thread.
     virtual srs_error_t consume(int* nn_consumed);
+private:
+    // Try to consume by tunnel.
+    bool consume_by_tunnel(SrsUdpMuxSocket* skt);
 };
 
 // The global async RECV manager.

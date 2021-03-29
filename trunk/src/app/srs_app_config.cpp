@@ -4178,6 +4178,23 @@ bool SrsConfig::get_threads_async_send()
     return SRS_CONF_PERFER_FALSE(conf->arg0());
 }
 
+bool SrsConfig::get_threads_async_tunnel()
+{
+    static bool DEFAULT = false;
+
+    SrsConfDirective* conf = root->get("threads");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("async_tunnel");
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
 bool SrsConfig::get_threads_cpu_affinity(std::string label, int* start, int* end)
 {
     static int DEFAULT_START = 0;

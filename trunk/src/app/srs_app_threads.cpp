@@ -59,6 +59,12 @@ SrsPps* _srs_thread_sync_100us = new SrsPps();
 SrsPps* _srs_thread_sync_1000us = new SrsPps();
 SrsPps* _srs_thread_sync_plus = new SrsPps();
 
+SrsPps* _srs_tunnel_recv_raw = new SrsPps();
+SrsPps* _srs_tunnel_recv_hit = new SrsPps();
+
+extern bool srs_is_rtp_or_rtcp(const uint8_t* data, size_t len);
+extern bool srs_is_rtcp(const uint8_t* data, size_t len);
+
 uint64_t srs_covert_cpuset(cpu_set_t v)
 {
 #ifdef SRS_OSX
@@ -243,10 +249,14 @@ srs_error_t SrsThreadPool::initialize()
     bool async_send = _srs_config->get_threads_async_send();
     _srs_async_send->set_enabled(async_send);
 
-    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d, recvQ=%d, aSend=%d",
+    bool async_tunnel = _srs_config->get_threads_async_tunnel();
+    _srs_async_recv->set_tunnel_enabled(async_tunnel);
+
+    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d, recvQ=%d, aSend=%d, tunnel=%d",
         entry->num, entry->label.c_str(), entry->name.c_str(), srsu2msi(interval_), async_srtp,
         entry->cpuset_ok, r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2),
-        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, recv_queue, async_send);
+        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, recv_queue, async_send,
+        async_tunnel);
 
     return err;
 }
@@ -379,6 +389,13 @@ srs_error_t SrsThreadPool::run()
             sync_desc = buf;
         }
 
+        string tunnel_desc;
+        _srs_tunnel_recv_raw->update(); _srs_tunnel_recv_hit->update();
+        if (_srs_tunnel_recv_raw->r10s() || _srs_tunnel_recv_hit->r10s()) {
+            snprintf(buf, sizeof(buf), ", tunnel=%d,%d", _srs_tunnel_recv_raw->r10s(), _srs_tunnel_recv_hit->r10s());
+            tunnel_desc = buf;
+        }
+
         // Show statistics for RTC server.
         SrsProcSelfStat* u = srs_get_self_proc_stat();
         // Resident Set Size: number of pages the process has in real memory.
@@ -408,9 +425,10 @@ srs_error_t SrsThreadPool::run()
             circuit_breaker = buf;
         }
 
-        srs_trace("Process: cpu=%.2f%%,%dMB, threads=%d,%.2f%%,%.2f%%%s%s%s%s",
+        srs_trace("Process: cpu=%.2f%%,%dMB, threads=%d,%.2f%%,%.2f%%%s%s%s%s%s",
             u->percent * 100, memory, (int)threads_.size(), top_percent, thread_percent,
-            async_logs.c_str(), sync_desc.c_str(), queue_desc.c_str(), circuit_breaker.c_str());
+            async_logs.c_str(), sync_desc.c_str(), queue_desc.c_str(), circuit_breaker.c_str(),
+            tunnel_desc.c_str());
     }
 
     return err;
@@ -775,8 +793,7 @@ srs_error_t SrsAsyncSRTP::initialize(std::string recv_key, std::string send_key)
         return srs_error_wrap(err, "init async srtp");
     }
 
-    // TODO: FIMXE: Remove it.
-    return SrsSRTP::initialize(recv_key, send_key);
+    return err;
 }
 
 srs_error_t SrsAsyncSRTP::protect_rtp(void* packet, int* nb_cipher)
@@ -848,6 +865,8 @@ srs_error_t SrsAsyncSRTP::unprotect_rtp(void* packet, int* nb_plaintext)
     // Do the job asynchronously.
     *nb_plaintext = 0;
 
+    ++_srs_tunnel_recv_raw->sugar;
+
     return srs_success;
 }
 
@@ -870,7 +889,23 @@ srs_error_t SrsAsyncSRTP::unprotect_rtcp(void* packet, int* nb_plaintext)
     // Do the job asynchronously.
     *nb_plaintext = 0;
 
+    ++_srs_tunnel_recv_raw->sugar;
+
     return srs_success;
+}
+
+void SrsAsyncSRTP::dig_tunnel(SrsUdpMuxSocket* skt)
+{
+    if (!task_) {
+        return;
+    }
+
+    uint64_t fast_id = skt->fast_id();
+    if (!fast_id) {
+        return;
+    }
+
+    _srs_async_recv->tunnels()->dig_tunnel(fast_id, task_);
 }
 
 SrsAsyncSRTPTask::SrsAsyncSRTPTask(SrsAsyncSRTP* codec)
@@ -1132,11 +1167,40 @@ SrsThreadUdpListener::~SrsThreadUdpListener()
 {
 }
 
+SrsRecvTunnels::SrsRecvTunnels()
+{
+    lock_ = new SrsThreadMutex();
+}
+
+// TODO: FIXME: Cleanup SRTP tasks.
+SrsRecvTunnels::~SrsRecvTunnels()
+{
+    srs_freep(lock_);
+}
+
+void SrsRecvTunnels::dig_tunnel(uint64_t fast_id, SrsAsyncSRTPTask* task)
+{
+    SrsThreadLocker(lock_);
+    tunnels_[fast_id] = task;
+}
+
+SrsAsyncSRTPTask* SrsRecvTunnels::find(uint64_t fast_id)
+{
+    SrsThreadLocker(lock_);
+    std::map<uint64_t, SrsAsyncSRTPTask*>::iterator it = tunnels_.find(fast_id);
+    if (it != tunnels_.end()) {
+        return it->second;
+    }
+    return NULL;
+}
+
 SrsAsyncRecvManager::SrsAsyncRecvManager()
 {
     lock_ = new SrsThreadMutex();
     received_packets_ = new SrsThreadQueue<SrsUdpMuxSocket>();
     max_recv_queue_ = 0;
+    tunnels_ = new SrsRecvTunnels();
+    tunnel_enabled_ = false;
 }
 
 // TODO: FIXME: We should stop the thread first, then free the manager.
@@ -1144,6 +1208,7 @@ SrsAsyncRecvManager::~SrsAsyncRecvManager()
 {
     srs_freep(lock_);
     srs_freep(received_packets_);
+    srs_freep(tunnels_);
 
     vector<SrsThreadUdpListener*>::iterator it;
     for (it = listeners_.begin(); it != listeners_.end(); ++it) {
@@ -1201,8 +1266,15 @@ srs_error_t SrsAsyncRecvManager::do_start()
                     continue;
                 }
 
-                // If got packet, copy to the queue.
+                // OK, we got packets.
                 got_packets = true;
+
+                // Try to consume the packet by tunnel.
+                if (tunnel_enabled_ && consume_by_tunnel(listener->skt_)) {
+                    continue;
+                }
+
+                // If got packet, copy to the queue.
                 received_packets_->push_back(listener->skt_->copy());
             }
         }
@@ -1257,6 +1329,35 @@ srs_error_t SrsAsyncRecvManager::consume(int* nn_consumed)
     }
 
     return err;
+}
+
+bool SrsAsyncRecvManager::consume_by_tunnel(SrsUdpMuxSocket* skt)
+{
+    uint64_t fast_id = skt->fast_id();
+    SrsAsyncSRTPTask* task = tunnels_->find(fast_id);
+    if (!task) {
+        return false;
+    }
+
+    char* data = skt->data(); int size = skt->size();
+    bool is_rtp_or_rtcp = srs_is_rtp_or_rtcp((uint8_t*)data, size);
+    bool is_rtcp = srs_is_rtcp((uint8_t*)data, size);
+    if (!is_rtp_or_rtcp) {
+        return false;
+    }
+
+    int nb_cipher = size;
+    char* buf = new char[nb_cipher];
+    memcpy(buf, data, nb_cipher);
+
+    SrsAsyncSRTPPacket* pkt = new SrsAsyncSRTPPacket(task);
+    pkt->msg_->wrap(buf, nb_cipher);
+    pkt->is_rtp_ = !is_rtcp;
+    pkt->do_decrypt_ = true;
+    _srs_async_srtp->add_packet(pkt);
+
+    ++_srs_tunnel_recv_hit->sugar;
+    return true;
 }
 
 SrsAsyncRecvManager* _srs_async_recv = new SrsAsyncRecvManager();

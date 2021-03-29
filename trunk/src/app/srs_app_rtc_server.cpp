@@ -254,6 +254,8 @@ SrsRtcServer::SrsRtcServer()
     handler = NULL;
     hijacker = NULL;
 
+    async_tunnel_ = false;
+
     _srs_config->subscribe(this);
 }
 
@@ -295,11 +297,14 @@ srs_error_t SrsRtcServer::initialize()
     _srs_rtp_msg_cache_buffers->setup(rtp_msg_cache_enabled, rtp_msg_cache_buffer_size);
     _srs_rtp_msg_cache_objs->setup(rtp_msg_cache_enabled, rtp_msg_cache_msg_size);
 
-    srs_trace("RTC: Object cache init, rtp-cache=(enabled:%d,pkt:%dm-%dw,payload:%dm-%dw-%dw), msg-cache=(enabled:%d,obj:%dm-%dw,buf:%dm-%dw)",
+    async_tunnel_ = _srs_config->get_threads_async_tunnel();
+
+    srs_trace("RTC: Object cache init, rtp-cache=(enabled:%d,pkt:%dm-%dw,payload:%dm-%dw-%dw), msg-cache=(enabled:%d,obj:%dm-%dw,buf:%dm-%dw), tunnel=%d",
         rtp_cache_enabled, (int)(rtp_cache_pkt_size/1024/1024), _srs_rtp_cache->capacity()/10000,
         (int)(rtp_cache_payload_size/1024/1024), _srs_rtp_raw_cache->capacity()/10000, _srs_rtp_fua_cache->capacity()/10000,
         rtp_msg_cache_enabled, (int)(rtp_msg_cache_msg_size/1024/1024), _srs_rtp_msg_cache_objs->capacity()/10000,
-        (int)(rtp_msg_cache_buffer_size/1024/1024), _srs_rtp_msg_cache_buffers->capacity()/10000);
+        (int)(rtp_msg_cache_buffer_size/1024/1024), _srs_rtp_msg_cache_buffers->capacity()/10000,
+        async_tunnel_);
 
     return err;
 }
@@ -446,6 +451,11 @@ srs_error_t SrsRtcServer::on_udp_packet(SrsUdpMuxSocket* skt)
                 ping.get_username().c_str(), peer_id.c_str(), fast_id);
         }
 
+        // Try to dig tunnel for ping-pong(the address might change).
+        if (async_tunnel_) {
+            session->dig_tunnel(skt);
+        }
+
         return session->on_stun(skt, &ping);
     }
 
@@ -475,7 +485,14 @@ srs_error_t SrsRtcServer::on_udp_packet(SrsUdpMuxSocket* skt)
     if (srs_is_dtls((uint8_t*)data, size)) {
         ++_srs_pps_rstuns->sugar;
 
-        return session->on_dtls(data, size);
+        err = session->on_dtls(data, size);
+
+        // Try to dig tunnel for DTLS packets(when DTLS done).
+        if (async_tunnel_) {
+            session->dig_tunnel(skt);
+        }
+
+        return err;
     }
     return srs_error_new(ERROR_RTC_UDP, "unknown packet");
 }
