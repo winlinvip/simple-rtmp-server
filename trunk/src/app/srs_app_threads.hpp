@@ -332,6 +332,10 @@ private:
     SrsSRTP* impl_;
     // For disposing, only set a flag, free it in future.
     int disposing_;
+private:
+    // For tunnel, srtp-send.
+    SrsUdpMuxSocket* sendonly_skt_;
+    SrsThreadMutex* lock_;
 public:
     SrsAsyncSRTPTask(SrsAsyncSRTP* codec);
     virtual ~SrsAsyncSRTPTask();
@@ -341,6 +345,10 @@ public:
 public:
     srs_error_t cook(SrsAsyncSRTPPacket* pkt);
     srs_error_t consume(SrsAsyncSRTPPacket* pkt);
+public:
+    void dig_tunnel(SrsUdpMuxSocket* skt);
+    // Try to consume by tunnel.
+    bool consume_by_tunnel(SrsAsyncSRTPPacket* pkt);
 };
 
 // The async SRTP packet, handle by task.
@@ -369,10 +377,16 @@ private:
 private:
     // The packets cooked by async SRTP manager.
     SrsThreadQueue<SrsAsyncSRTPPacket>* cooked_packets_;
+private:
+    // Whether enabled tunnel.
+    bool tunnel_enabled_;
 public:
     SrsAsyncSRTPManager();
     virtual ~SrsAsyncSRTPManager();
 public:
+    // Enable or disable the tunnel.
+    // SrsAsyncSRTPManager::set_tunnel_enabled()
+    void set_tunnel_enabled(bool v) { tunnel_enabled_ = v; }
     void register_task(SrsAsyncSRTPTask* task);
     void on_srtp_codec_destroy(SrsAsyncSRTPTask* task);
     void add_packet(SrsAsyncSRTPPacket* pkt);
@@ -498,6 +512,9 @@ public:
     void set_enabled(bool v) { enabled_ = v; }
     // Send the packet.
     void add_packet(SrsAsyncUdpPacket* pkt);
+    // Get the size of packets queue.
+    // SrsAsyncSendManager::size()
+    int size() { return sending_packets_->size(); }
     // Start the thread.
     static srs_error_t start(void* arg);
 private:
