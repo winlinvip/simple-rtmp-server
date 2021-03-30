@@ -205,37 +205,21 @@ srs_error_t SrsSecurityTransport::srtp_initialize()
 
 srs_error_t SrsSecurityTransport::on_rtp_plaintext(char* plaintext, int size)
 {
-    // We should keep alive here, because when tunnel is enabled, the connection die
-    // for the SrsRtcServer::on_udp_packet might be skipped.
-    session_->alive();
-
     return session_->on_rtp_plaintext(plaintext, size);
 }
 
 srs_error_t SrsSecurityTransport::on_rtcp_plaintext(char* plaintext, int size)
 {
-    // We should keep alive here, because when tunnel is enabled, the connection die
-    // for the SrsRtcServer::on_udp_packet might be skipped.
-    session_->alive();
-
     return session_->on_rtcp_plaintext(plaintext, size);
 }
 
 srs_error_t SrsSecurityTransport::on_rtp_cipher(char* cipher, int size)
 {
-    // We should keep alive here, because when tunnel is enabled, the connection die
-    // for the SrsRtcServer::on_udp_packet might be skipped.
-    session_->alive();
-
     return session_->on_rtp_cipher(cipher, size);
 }
 
 srs_error_t SrsSecurityTransport::on_rtcp_cipher(char* cipher, int size)
 {
-    // We should keep alive here, because when tunnel is enabled, the connection die
-    // for the SrsRtcServer::on_udp_packet might be skipped.
-    session_->alive();
-
     return session_->on_rtcp_cipher(cipher, size);
 }
 
@@ -2244,6 +2228,9 @@ srs_error_t SrsRtcConnection::on_rtp(char* data, int nb_data)
 srs_error_t SrsRtcConnection::on_rtp_plaintext(char* plaintext, int nb_plaintext)
 {
     srs_error_t err = srs_success;
+
+    // We should keep alive here, for tunnel is enabled.
+    alive();
 
     SrsRtcPublishStream* publisher = NULL;
     if ((err = find_publisher(plaintext, nb_plaintext, &publisher)) != srs_success) {
