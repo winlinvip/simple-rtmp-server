@@ -137,6 +137,7 @@ extern std::string srs_config_bool2switch(std::string sbool);
 // so we must transform the vhost directive anytime load the config.
 // @param root the root directive to transform, in and out parameter.
 extern srs_error_t srs_config_transform_vhost(SrsConfDirective* root);
+extern srs_error_t srs_config_transform_vhost2(SrsConfDirective* root);
 
 // @global config object.
 extern SrsConfig* _srs_config;
@@ -271,11 +272,6 @@ class SrsConfig
 {
 // user command
 private:
-    // Whether srs is run in dolphin mode.
-    // @see https://github.com/ossrs/srs-dolphin
-    bool dolphin;
-    std::string dolphin_rtmp_port;
-    std::string dolphin_http_port;
     // Whether show help and exit.
     bool show_help;
     // Whether test config file and exit.
@@ -306,10 +302,6 @@ private:
 public:
     SrsConfig();
     virtual ~SrsConfig();
-    // dolphin
-public:
-    // Whether srs is in dolphin mode.
-    virtual bool is_dolphin();
 // Reload
 public:
     // For reload handler to register itself,
@@ -426,6 +418,8 @@ public:
     // The root directive, no name and args, contains directives.
     // All directive parsed can retrieve from root.
     virtual SrsConfDirective* get_root();
+    // Get the first stream config.
+    virtual SrsConfDirective* get_first_stream();
     // Get the daemon config.
     // If  true, SRS will run in daemon mode, fork and fork to reap the
     // grand-child process to init process.
@@ -526,6 +520,8 @@ public:
     virtual srs_utime_t get_stream_caster_gb28181_sip_query_catalog_interval(SrsConfDirective* conf);
 
 // rtc section
+private:
+    SrsConfDirective* get_first_rtc_server();
 public:
     virtual bool get_rtc_server_enabled();
     virtual bool get_rtc_server_enabled(SrsConfDirective* conf);
@@ -1049,6 +1045,7 @@ public:
     virtual std::string get_https_api_ssl_cert();
 // http stream section
 private:
+    SrsConfDirective* get_first_http_stream();
     // Whether http stream enabled.
     virtual bool get_http_stream_enabled(SrsConfDirective* conf);
 public:

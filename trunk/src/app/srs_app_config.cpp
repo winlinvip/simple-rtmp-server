@@ -514,6 +514,51 @@ srs_error_t srs_config_transform_vhost(SrsConfDirective* root)
     return err;
 }
 
+srs_error_t srs_config_transform_vhost2(SrsConfDirective* root)
+{
+    srs_error_t err = srs_success;
+
+    SrsConfDirective* stream = new SrsConfDirective();
+    SrsAutoFree(SrsConfDirective, stream);
+
+    // Collect directives which should be moved to stream.
+    for (int i = 0; i < (int)root->directives.size(); i++) {
+        SrsConfDirective* dir = root->directives.at(i);
+
+        // SRS5.0, move listen/max_connections/http_server/rtc_server to stream.
+        //  SRS1/2/3/4:
+        //      listen; max_connections;
+        //      http_server {} rtc_server{}
+        //  SRS5+:
+        //      stream {
+        //          listen; max_connections;
+        //          http_server {} rtc_server{}
+        //      }
+        if (dir->name == "listen" || dir->name == "max_connections"
+            || dir->name == "http_server" || dir->name == "rtc_server") {
+            stream->directives.push_back(dir);
+        }
+    }
+
+    // No directives for stream, ignore.
+    if (stream->directives.empty()) {
+        return err;
+    }
+
+    // Remove the stream directives from root.
+    for (int i = 0; i < (int)stream->directives.size(); i++) {
+        SrsConfDirective* dir = stream->directives.at(i);
+        root->remove(dir);
+    }
+
+    // Push the stream to root.
+    stream->name = "stream";
+    root->directives.push_back(stream);
+    stream = NULL;
+
+    return err;
+}
+
 // LCOV_EXCL_START
 srs_error_t srs_config_dumps_engine(SrsConfDirective* dir, SrsJsonObject* engine)
 {
@@ -1136,8 +1181,6 @@ srs_error_t SrsConfDirective::read_token(SrsConfigBuffer* buffer, vector<string>
 
 SrsConfig::SrsConfig()
 {
-    dolphin = false;
-    
     show_help = false;
     show_version = false;
     test_conf = false;
@@ -1151,11 +1194,6 @@ SrsConfig::SrsConfig()
 SrsConfig::~SrsConfig()
 {
     srs_freep(root);
-}
-
-bool SrsConfig::is_dolphin()
-{
-    return dolphin;
 }
 
 void SrsConfig::subscribe(ISrsReloadHandler* handler)
@@ -1196,6 +1234,9 @@ srs_error_t SrsConfig::reload()
     
     // transform config to compatible with previous style of config.
     if ((err = srs_config_transform_vhost(conf.root)) != srs_success) {
+        return srs_error_wrap(err, "transform config");
+    }
+    if ((err = srs_config_transform_vhost2(conf.root)) != srs_success) {
         return srs_error_wrap(err, "transform config");
     }
     
@@ -1612,102 +1653,14 @@ srs_error_t SrsConfig::reload_http_api(SrsConfDirective* old_root)
 srs_error_t SrsConfig::reload_http_stream(SrsConfDirective* old_root)
 {
     srs_error_t err = srs_success;
-    
-    // merge config.
-    std::vector<ISrsReloadHandler*>::iterator it;
-    
-    // state graph
-    //      old_http_stream     new_http_stream
-    //      DISABLED    =>      ENABLED
-    //      ENABLED     =>      DISABLED
-    //      ENABLED     =>      ENABLED (modified)
-    
-    SrsConfDirective* new_http_stream = root->get("http_server");
-    SrsConfDirective* old_http_stream = old_root->get("http_server");
-    
-    // DISABLED    =>      ENABLED
-    if (!get_http_stream_enabled(old_http_stream) && get_http_stream_enabled(new_http_stream)) {
-        for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-            ISrsReloadHandler* subscribe = *it;
-            if ((err = subscribe->on_reload_http_stream_enabled()) != srs_success) {
-                return srs_error_wrap(err, "http stream off=>on");
-            }
-        }
-        srs_trace("reload http stream off=>on success.");
-        return err;
-    }
-    
-    // ENABLED     =>      DISABLED
-    if (get_http_stream_enabled(old_http_stream) && !get_http_stream_enabled(new_http_stream)) {
-        for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-            ISrsReloadHandler* subscribe = *it;
-            if ((err = subscribe->on_reload_http_stream_disabled()) != srs_success) {
-                return srs_error_wrap(err, "http stream on=>off");
-            }
-        }
-        srs_trace("reload http stream on=>off success.");
-        return err;
-    }
-    
-    //      ENABLED     =>  ENABLED (modified)
-    if (get_http_stream_enabled(old_http_stream) && get_http_stream_enabled(new_http_stream)
-        && !srs_directive_equals(old_http_stream, new_http_stream)
-        ) {
-        for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-            ISrsReloadHandler* subscribe = *it;
-            if ((err = subscribe->on_reload_http_stream_updated()) != srs_success) {
-                return srs_error_wrap(err, "http stream enabled");
-            }
-        }
-        srs_trace("reload http stream enabled success.");
-        
-        if (!srs_directive_equals(old_http_stream->get("crossdomain"), new_http_stream->get("crossdomain"))) {
-            for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-                ISrsReloadHandler* subscribe = *it;
-                if ((err = subscribe->on_reload_http_stream_crossdomain()) != srs_success) {
-                    return srs_error_wrap(err, "http stream crossdomain");
-                }
-            }
-        }
-        srs_trace("reload http stream crossdomain success.");
-        return err;
-    }
-    
-    srs_trace("reload http stream success, nothing changed.");
+    // TODO: FIXME: We never support reload HTTP stream.
     return err;
 }
 
 srs_error_t SrsConfig::reload_rtc_server(SrsConfDirective* old_root)
 {
     srs_error_t err = srs_success;
-
-    // merge config.
-    std::vector<ISrsReloadHandler*>::iterator it;
-
-    // state graph
-    //      old_rtc_server     new_rtc_server
-    //      ENABLED     =>      ENABLED (modified)
-
-    SrsConfDirective* new_rtc_server = root->get("rtc_server");
-    SrsConfDirective* old_rtc_server = old_root->get("rtc_server");
-
-    // TODO: FIXME: Support disable or enable reloading.
-
-    //      ENABLED     =>  ENABLED (modified)
-    if (get_rtc_server_enabled(old_rtc_server) && get_rtc_server_enabled(new_rtc_server)
-        && !srs_directive_equals(old_rtc_server, new_rtc_server)
-        ) {
-        for (it = subscribes.begin(); it != subscribes.end(); ++it) {
-            ISrsReloadHandler* subscribe = *it;
-            if ((err = subscribe->on_reload_rtc_server()) != srs_success) {
-                return srs_error_wrap(err, "rtc server enabled");
-            }
-        }
-        srs_trace("reload rtc server success.");
-        return err;
-    }
-
-    srs_trace("reload rtc server success, nothing changed.");
+    // TODO: FIXME: Do not support reloading RTC Server.
     return err;
 }
 
@@ -1938,6 +1891,12 @@ srs_error_t SrsConfig::parse_options(int argc, char** argv)
                 exit(0);
             }
         }
+        if (err == srs_success && (err = srs_config_transform_vhost2(root)) == srs_success) {
+            if (err == srs_success && (err = check_config()) == srs_success) {
+                srs_trace("config file is ok");
+                exit(0);
+            }
+        }
         
         srs_error("invalid config, %s", srs_error_desc(err).c_str());
         int ret = srs_error_code(err);
@@ -1947,6 +1906,9 @@ srs_error_t SrsConfig::parse_options(int argc, char** argv)
     
     // transform config to compatible with previous style of config.
     if ((err = srs_config_transform_vhost(root)) != srs_success) {
+        return srs_error_wrap(err, "transform");
+    }
+    if ((err = srs_config_transform_vhost2(root)) != srs_success) {
         return srs_error_wrap(err, "transform");
     }
     
@@ -2047,9 +2009,7 @@ srs_error_t SrsConfig::global_to_json(SrsJsonObject* obj)
             continue;
         }
         
-        if (dir->name == "listen") {
-            obj->set(dir->name, dir->dumps_args());
-        } else if (dir->name == "pid") {
+        if (dir->name == "pid") {
             obj->set(dir->name, dir->dumps_arg0_to_str());
         } else if (dir->name == "chunk_size") {
             obj->set(dir->name, dir->dumps_arg0_to_integer());
@@ -2061,8 +2021,6 @@ srs_error_t SrsConfig::global_to_json(SrsJsonObject* obj)
             obj->set(dir->name, dir->dumps_arg0_to_str());
         } else if (dir->name == "srs_log_file") {
             obj->set(dir->name, dir->dumps_arg0_to_str());
-        } else if (dir->name == "max_connections") {
-            obj->set(dir->name, dir->dumps_arg0_to_integer());
         } else if (dir->name == "daemon") {
             obj->set(dir->name, dir->dumps_arg0_to_boolean());
         } else if (dir->name == "utc_time") {
@@ -2123,19 +2081,6 @@ srs_error_t SrsConfig::global_to_json(SrsJsonObject* obj)
                             ssobj->set(ssdir->name, ssdir->dumps_arg0_to_boolean());
                         }
                     }
-                }
-            }
-            obj->set(dir->name, sobj);
-        } else if (dir->name == "http_server") {
-            SrsJsonObject* sobj = SrsJsonAny::object();
-            for (int j = 0; j < (int)dir->directives.size(); j++) {
-                SrsConfDirective* sdir = dir->directives.at(j);
-                if (sdir->name == "enabled") {
-                    sobj->set(sdir->name, sdir->dumps_arg0_to_boolean());
-                } else if (sdir->name == "listen") {
-                    sobj->set(sdir->name, sdir->dumps_arg0_to_str());
-                } else if (sdir->name == "dir") {
-                    sobj->set(sdir->name, sdir->dumps_arg0_to_str());
                 }
             }
             obj->set(dir->name, sobj);
@@ -3253,28 +3198,6 @@ srs_error_t SrsConfig::parse_argv(int& i, char** argv)
                 show_help = false;
                 test_conf = true;
                 break;
-            case 'p':
-                dolphin = true;
-                if (*p) {
-                    dolphin_rtmp_port = p;
-                    continue;
-                }
-                if (argv[++i]) {
-                    dolphin_rtmp_port = argv[i];
-                    continue;
-                }
-                return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "-p requires params");
-            case 'x':
-                dolphin = true;
-                if (*p) {
-                    dolphin_http_port = p;
-                    continue;
-                }
-                if (argv[++i]) {
-                    dolphin_http_port = argv[i];
-                    continue;
-                }
-                return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "-x requires params");
             case 'v':
             case 'V':
                 show_help = false;
@@ -3384,11 +3307,11 @@ srs_error_t SrsConfig::check_normal_config()
     for (int i = 0; i < (int)root->directives.size(); i++) {
         SrsConfDirective* conf = root->at(i);
         std::string n = conf->name;
-        if (n != "listen" && n != "pid" && n != "chunk_size" && n != "ff_log_dir"
+        if (n != "pid" && n != "chunk_size" && n != "ff_log_dir"
             && n != "srs_log_tank" && n != "srs_log_level" && n != "srs_log_file"
-            && n != "max_connections" && n != "daemon" && n != "heartbeat"
+            && n != "daemon" && n != "heartbeat" && n != "stream"
             && n != "http_api" && n != "stats" && n != "vhost" && n != "pithy_print_ms"
-            && n != "http_server" && n != "stream_caster" && n != "rtc_server" && n != "srt_server"
+            && n != "stream_caster" && n != "srt_server"
             && n != "utc_time" && n != "work_dir" && n != "asprocess"
             && n != "ff_log_level" && n != "grace_final_wait" && n != "force_grace_quit"
             && n != "grace_start_wait" && n != "empty_ip_ok" && n != "disable_daemon_for_docker"
@@ -3396,7 +3319,32 @@ srs_error_t SrsConfig::check_normal_config()
             && n != "srs_log_flush_interval" && n != "threads" && n != "circuit_breaker") {
             return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal directive %s", n.c_str());
         }
+
+        for (int j = 0; conf && n == "stream" && j < (int)conf->directives.size(); j++) {
+            SrsConfDirective* obj = conf->at(j);
+            string m = obj->name;
+            if (m != "listen" && m != "max_connections" && m != "http_server" && m != "rtc_server") {
+                return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal stream directive %s", m.c_str());
+            }
+
+            for (int k = 0; obj && m == "http_server" && k < (int)obj->directives.size(); k++) {
+                string l = obj->at(k)->name;
+                if (l != "enabled" && l != "listen" && l != "dir" && l != "crossdomain" && l != "https") {
+                    return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal http_stream.%s", l.c_str());
+                }
+            }
+
+            for (int k = 0; obj && m == "rtc_server" && k < (int)obj->directives.size(); k++) {
+                string l = obj->at(k)->name;
+                if (l != "enabled" && l != "listen" && l != "dir" && l != "candidate" && l != "ecdsa"
+                    && l != "encrypt" && l != "reuseport" && l != "merge_nalus" && l != "perf_stat" && l != "black_hole"
+                    && l != "ip_family" && l != "rtp_cache" && l != "rtp_msg_cache") {
+                    return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal rtc_server.%s", l.c_str());
+                }
+            }
+        }
     }
+
     if (true) {
         SrsConfDirective* conf = root->get("http_api");
         for (int i = 0; conf && i < (int)conf->directives.size(); i++) {
@@ -3413,15 +3361,6 @@ srs_error_t SrsConfig::check_normal_config()
                         return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal http_api.raw_api.%s", m.c_str());
                     }
                 }
-            }
-        }
-    }
-    if (true) {
-        SrsConfDirective* conf = root->get("http_server");
-        for (int i = 0; conf && i < (int)conf->directives.size(); i++) {
-            string n = conf->at(i)->name;
-            if (n != "enabled" && n != "listen" && n != "dir" && n != "crossdomain" && n != "https") {
-                return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal http_stream.%s", n.c_str());
             }
         }
     }
@@ -3454,17 +3393,6 @@ srs_error_t SrsConfig::check_normal_config()
             string n = conf->at(i)->name;
             if (n != "enabled" && n != "network" && n != "disk") {
                 return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal stats.%s", n.c_str());
-            }
-        }
-    }
-    if (true) {
-        SrsConfDirective* conf = root->get("rtc_server");
-        for (int i = 0; conf && i < (int)conf->directives.size(); i++) {
-            string n = conf->at(i)->name;
-            if (n != "enabled" && n != "listen" && n != "dir" && n != "candidate" && n != "ecdsa"
-                && n != "encrypt" && n != "reuseport" && n != "merge_nalus" && n != "perf_stat" && n != "black_hole"
-                && n != "ip_family" && n != "rtp_cache" && n != "rtp_msg_cache") {
-                return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal rtc_server.%s", n.c_str());
             }
         }
     }
@@ -3872,23 +3800,6 @@ srs_error_t SrsConfig::parse_buffer(SrsConfigBuffer* buffer)
         return srs_error_wrap(err, "root parse");
     }
     
-    // mock by dolphin mode.
-    // for the dolphin will start srs with specified params.
-    if (dolphin) {
-        // for RTMP.
-        set_config_directive(root, "listen", dolphin_rtmp_port);
-        
-        // for HTTP
-        set_config_directive(root, "http_server", "");
-        SrsConfDirective* http_server = root->get("http_server");
-        set_config_directive(http_server, "enabled", "on");
-        set_config_directive(http_server, "listen", dolphin_http_port);
-        
-        // others.
-        set_config_directive(root, "daemon", "off");
-        set_config_directive(root, "srs_log_tank", "console");
-    }
-    
     return err;
 }
 
@@ -3917,11 +3828,21 @@ SrsConfDirective* SrsConfig::get_root()
     return root;
 }
 
+SrsConfDirective* SrsConfig::get_first_stream()
+{
+    return root->get("stream");
+}
+
 int SrsConfig::get_max_connections()
 {
     static int DEFAULT = 1000;
     
-    SrsConfDirective* conf = root->get("max_connections");
+    SrsConfDirective* conf = get_first_stream();
+    if (!conf) {
+        return DEFAULT;
+    }
+
+    conf = conf->get("max_connections");
     if (!conf || conf->arg0().empty()) {
         return DEFAULT;
     }
@@ -3933,7 +3854,12 @@ vector<string> SrsConfig::get_listens()
 {
     std::vector<string> ports;
     
-    SrsConfDirective* conf = root->get("listen");
+    SrsConfDirective* conf = get_first_stream();
+    if (!conf) {
+        return ports;
+    }
+
+    conf = conf->get("listen");
     if (!conf) {
         return ports;
     }
@@ -4794,9 +4720,19 @@ srs_utime_t SrsConfig::get_stream_caster_gb28181_sip_query_catalog_interval(SrsC
     return (srs_utime_t)(::atoi(conf->arg0().c_str()) * SRS_UTIME_SECONDS);
 }
 
+SrsConfDirective* SrsConfig::get_first_rtc_server()
+{
+    SrsConfDirective* conf = get_first_stream();
+    if (!conf) {
+        return NULL;
+    }
+
+    return conf->get("rtc_server");
+}
+
 bool SrsConfig::get_rtc_server_enabled()
 {
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     return get_rtc_server_enabled(conf);
 }
 
@@ -4820,7 +4756,7 @@ int SrsConfig::get_rtc_server_listen()
 {
     static int DEFAULT = 8000;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4837,7 +4773,7 @@ std::string SrsConfig::get_rtc_server_candidates()
 {
     static string DEFAULT = "*";
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4864,7 +4800,7 @@ std::string SrsConfig::get_rtc_server_ip_family()
 {
     static string DEFAULT = "ipv4";
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4881,7 +4817,7 @@ bool SrsConfig::get_rtc_server_ecdsa()
 {
     static bool DEFAULT = true;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4898,7 +4834,7 @@ bool SrsConfig::get_rtc_server_encrypt()
 {
     static bool DEFAULT = true;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4929,7 +4865,7 @@ int SrsConfig::get_rtc_server_reuseport2()
 {
     static int DEFAULT = 1;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4946,7 +4882,7 @@ bool SrsConfig::get_rtc_server_merge_nalus()
 {
     static int DEFAULT = false;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4963,7 +4899,7 @@ bool SrsConfig::get_rtc_server_perf_stat()
 {
     static bool DEFAULT = false;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -4978,7 +4914,7 @@ bool SrsConfig::get_rtc_server_perf_stat()
 
 SrsConfDirective* SrsConfig::get_rtc_server_rtp_cache()
 {
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return NULL;
     }
@@ -5044,7 +4980,7 @@ uint64_t SrsConfig::get_rtc_server_rtp_cache_payload_size()
 
 SrsConfDirective* SrsConfig::get_rtc_server_rtp_msg_cache()
 {
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return NULL;
     }
@@ -5112,7 +5048,7 @@ bool SrsConfig::get_rtc_server_black_hole()
 {
     static bool DEFAULT = false;
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -5134,7 +5070,7 @@ std::string SrsConfig::get_rtc_server_black_hole_addr()
 {
     static string DEFAULT = "";
 
-    SrsConfDirective* conf = root->get("rtc_server");
+    SrsConfDirective* conf = get_first_rtc_server();
     if (!conf) {
         return DEFAULT;
     }
@@ -8264,9 +8200,19 @@ string SrsConfig::get_default_app_name() {
     return conf->arg0();
 }
 
+SrsConfDirective* SrsConfig::get_first_http_stream()
+{
+    SrsConfDirective* conf = get_first_stream();
+    if (!conf) {
+        return NULL;
+    }
+
+    return conf->get("http_server");
+}
+
 bool SrsConfig::get_http_stream_enabled()
 {
-    SrsConfDirective* conf = root->get("http_server");
+    SrsConfDirective* conf = get_first_http_stream();
     return get_http_stream_enabled(conf);
 }
 
@@ -8290,7 +8236,7 @@ string SrsConfig::get_http_stream_listen()
 {
     static string DEFAULT = "8080";
     
-    SrsConfDirective* conf = root->get("http_server");
+    SrsConfDirective* conf = get_first_http_stream();
     if (!conf) {
         return DEFAULT;
     }
@@ -8307,7 +8253,7 @@ string SrsConfig::get_http_stream_dir()
 {
     static string DEFAULT = "./objs/nginx/html";
     
-    SrsConfDirective* conf = root->get("http_server");
+    SrsConfDirective* conf = get_first_http_stream();
     if (!conf) {
         return DEFAULT;
     }
@@ -8324,7 +8270,7 @@ bool SrsConfig::get_http_stream_crossdomain()
 {
     static bool DEFAULT = true;
     
-    SrsConfDirective* conf = root->get("http_server");
+    SrsConfDirective* conf = get_first_http_stream();
     if (!conf) {
         return DEFAULT;
     }
@@ -8339,7 +8285,7 @@ bool SrsConfig::get_http_stream_crossdomain()
 
 SrsConfDirective* SrsConfig::get_https_stream()
 {
-    SrsConfDirective* conf = root->get("http_server");
+    SrsConfDirective* conf = get_first_http_stream();
     if (!conf) {
         return NULL;
     }

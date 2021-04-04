@@ -839,11 +839,6 @@ srs_error_t SrsServer::initialize_signal()
 
 srs_error_t SrsServer::acquire_pid_file()
 {
-    // when srs in dolphin mode, no need the pid file.
-    if (_srs_config->is_dolphin()) {
-        return srs_success;
-    }
-    
     std::string pid_file = _srs_config->get_pid_file();
     
     // -rw-r--r--
