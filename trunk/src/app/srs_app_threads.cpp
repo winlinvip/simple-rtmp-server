@@ -215,21 +215,25 @@ extern const int LOG_MAX_SIZE;
 extern __thread char* _srs_log_data;
 
 // Setup the thread-local variables, MUST call when each thread starting.
-void SrsThreadPool::setup()
+srs_error_t SrsThreadPool::setup()
 {
+    srs_error_t err = srs_success;
+
     // Initialize the log shared buffer for threads.
     srs_assert(!_srs_log_data);
     _srs_log_data = new char[LOG_MAX_SIZE];
+
+    // MUST init ST for each thread, because ST is thread-local now.
+    if ((err = srs_st_init()) != srs_success) {
+        return srs_error_wrap(err, "init st");
+    }
+
+    return err;
 }
 
 srs_error_t SrsThreadPool::initialize()
 {
     srs_error_t err = srs_success;
-
-    // TODO: FIXME: Should init ST for each thread.
-    if ((err = srs_st_init()) != srs_success) {
-        return srs_error_wrap(err, "initialize st failed");
-    }
 
     SrsThreadEntry* entry = (SrsThreadEntry*)entry_;
 #ifndef SRS_OSX
@@ -489,12 +493,15 @@ SrsThreadEntry* SrsThreadPool::hybrid()
 
 void* SrsThreadPool::start(void* arg)
 {
-    // Initialize thread-local variables.
-    SrsThreadPool::setup();
-
     srs_error_t err = srs_success;
 
     SrsThreadEntry* entry = (SrsThreadEntry*)arg;
+
+    // Initialize thread-local variables.
+    if ((err = SrsThreadPool::setup()) != srs_success) {
+        entry->err = err;
+        return NULL;
+    }
 
     // Set the thread local fields.
     entry->tid = gettid();

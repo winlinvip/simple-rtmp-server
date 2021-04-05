@@ -193,7 +193,7 @@ public:
     bool hybrid_critical_water_level();
     bool hybrid_dying_water_level();
     // Setup the thread-local variables.
-    static void setup();
+    static srs_error_t setup();
     // Initialize the thread pool.
     srs_error_t initialize();
     // Execute start function with label in thread.

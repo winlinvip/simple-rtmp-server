@@ -52,11 +52,13 @@ bool _srs_in_docker = false;
 #include <srs_app_st.hpp>
 
 // Initialize global settings.
-srs_error_t prepare_main() {
+srs_error_t prepare_main()
+{
     srs_error_t err = srs_success;
 
-    if ((err = srs_st_init()) != srs_success) {
-        return srs_error_wrap(err, "init st");
+    // Initialize thread-local variables.
+    if ((err = SrsThreadPool::setup()) != srs_success) {
+        return srs_error_wrap(err, "thread init");
     }
 
     if ((err = _srs_rtc_dtls_certificate->initialize()) != srs_success) {
@@ -73,9 +75,6 @@ srs_error_t prepare_main() {
 // Copy from gtest-1.6.0/src/gtest_main.cc
 GTEST_API_ int main(int argc, char **argv)
 {
-    // Initialize thread-local variables.
-    SrsThreadPool::setup();
-
     srs_error_t err = srs_success;
 
     if ((err = prepare_main()) != srs_success) {

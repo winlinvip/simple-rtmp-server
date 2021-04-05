@@ -90,7 +90,12 @@ SrsServer* _srs_server = NULL;
 srs_error_t do_main(int argc, char** argv)
 {
     srs_error_t err = srs_success;
-    
+
+    // Initialize thread-local variables.
+    if ((err = SrsThreadPool::setup()) != srs_success) {
+        return srs_error_wrap(err, "thread init");
+    }
+
     // TODO: support both little and big endian.
     srs_assert(srs_is_little_endian());
 
@@ -223,10 +228,8 @@ srs_error_t do_main(int argc, char** argv)
     return err;
 }
 
-int main(int argc, char** argv) {
-    // Initialize thread-local variables.
-    SrsThreadPool::setup();
-
+int main(int argc, char** argv)
+{
     // For background context id.
     _srs_context->set_id(_srs_context->generate_id());
 
