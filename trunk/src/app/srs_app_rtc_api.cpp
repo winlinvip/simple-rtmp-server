@@ -38,7 +38,15 @@ using namespace std;
 
 uint32_t SrsGoApiRtcPlay::ssrc_num = 0;
 
-SrsGoApiRtcPlay::SrsGoApiRtcPlay(SrsRtcServer* server)
+ISrsRtcServer::ISrsRtcServer()
+{
+}
+
+ISrsRtcServer::~ISrsRtcServer()
+{
+}
+
+SrsGoApiRtcPlay::SrsGoApiRtcPlay(ISrsRtcServer* server)
 {
     server_ = server;
 }

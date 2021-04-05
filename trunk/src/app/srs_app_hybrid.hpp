@@ -51,6 +51,7 @@ public:
 // The hybrid server manager.
 class SrsHybridServer : public ISrsFastTimer
 {
+    friend class SrsApiServer;
 private:
     std::vector<ISrsHybridServer*> servers;
     SrsFastTimer* timer_;
@@ -65,7 +66,6 @@ public:
     virtual srs_error_t run();
     virtual void stop();
 public:
-    virtual SrsServerAdapter* srs();
     SrsFastTimer* timer();
 // interface ISrsFastTimer
 private:

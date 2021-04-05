@@ -40,6 +40,7 @@
 #include <srs_app_gb28181_sip.hpp>
 #include <srs_app_hourglass.hpp>
 #include <srs_app_hybrid.hpp>
+#include <srs_app_rtc_api.hpp>
 
 class SrsServer;
 class SrsHttpServeMux;
@@ -415,7 +416,7 @@ public:
 };
 
 // The HTTP API server.
-class SrsApiServer : public ISrsTcpMuxHandler, public ISrsResourceManager
+class SrsApiServer : public ISrsTcpMuxHandler, public ISrsResourceManager, public ISrsRtcServer
 {
 private:
     SrsBufferListener* http_;
@@ -437,6 +438,12 @@ private:
 private:
     virtual srs_error_t http_handle();
     srs_error_t listen_api();
+private:
+    virtual srs_error_t create_session(
+        SrsRequest* req, const SrsSdp& remote_sdp, SrsSdp& local_sdp, const std::string& mock_eip,
+        bool publish, bool dtls, bool srtp,
+        SrsRtcConnection** psession
+    );
 public:
     static srs_error_t start(void* arg);
 private:

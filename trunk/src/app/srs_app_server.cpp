@@ -55,6 +55,7 @@ using namespace std;
 #include <srs_app_coworkers.hpp>
 #include <srs_app_gb28181.hpp>
 #include <srs_app_gb28181_sip.hpp>
+#include <srs_app_rtc_server.hpp>
 
 std::string srs_listener_type2string(SrsListenerType type)
 {
@@ -1961,10 +1962,10 @@ srs_error_t SrsApiServer::listen_api()
     srs_error_t err = srs_success;
 
     // TODO: FIXME: Implements it.
-    //if ((err = http_api_mux_->handle("/rtc/v1/play/", new SrsGoApiRtcPlay(this))) != srs_success) {
-    //    return srs_error_wrap(err, "handle play");
-    //}
-    //
+    if ((err = http_api_mux_->handle("/rtc/v1/play/", new SrsGoApiRtcPlay(this))) != srs_success) {
+        return srs_error_wrap(err, "handle play");
+    }
+
     //if ((err = http_api_mux_->handle("/rtc/v1/publish/", new SrsGoApiRtcPublish(this))) != srs_success) {
     //    return srs_error_wrap(err, "handle publish");
     //}
@@ -1975,6 +1976,28 @@ srs_error_t SrsApiServer::listen_api()
     //    return srs_error_wrap(err, "handle nack");
     //}
 #endif
+
+    return err;
+}
+
+srs_error_t SrsApiServer::create_session(
+    SrsRequest* req, const SrsSdp& remote_sdp, SrsSdp& local_sdp, const std::string& mock_eip,
+    bool publish, bool dtls, bool srtp,
+    SrsRtcConnection** psession
+) {
+    srs_error_t err = srs_success;
+
+    vector<ISrsHybridServer*> servers = _srs_hybrid->servers;
+    for (vector<ISrsHybridServer*>::iterator it = servers.begin(); it != servers.end(); ++it) {
+        RtcServerAdapter* adapter = dynamic_cast<RtcServerAdapter*>(*it);
+        if (!adapter) {
+            continue;
+        }
+
+        // TODO: FIXME: Should notify thread by thread-slot.
+        return adapter->rtc->create_session(req, remote_sdp, local_sdp, mock_eip,
+            publish, dtls, srtp, psession);
+    }
 
     return err;
 }

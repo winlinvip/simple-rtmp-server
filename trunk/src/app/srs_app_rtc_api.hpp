@@ -26,20 +26,36 @@
 
 #include <srs_core.hpp>
 
+#include <string>
+
 #include <srs_http_stack.hpp>
 
 class SrsRtcServer;
 class SrsRequest;
 class SrsSdp;
+class SrsRtcConnection;
+
+class ISrsRtcServer
+{
+public:
+    ISrsRtcServer();
+    virtual ~ISrsRtcServer();
+public:
+    virtual srs_error_t create_session(
+        SrsRequest* req, const SrsSdp& remote_sdp, SrsSdp& local_sdp, const std::string& mock_eip,
+        bool publish, bool dtls, bool srtp,
+        SrsRtcConnection** psession
+    ) = 0;
+};
 
 class SrsGoApiRtcPlay : public ISrsHttpHandler
 {
 public:
     static uint32_t ssrc_num;
 private:
-    SrsRtcServer* server_;
+    ISrsRtcServer* server_;
 public:
-    SrsGoApiRtcPlay(SrsRtcServer* server);
+    SrsGoApiRtcPlay(ISrsRtcServer* server);
     virtual ~SrsGoApiRtcPlay();
 public:
     virtual srs_error_t serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r);
