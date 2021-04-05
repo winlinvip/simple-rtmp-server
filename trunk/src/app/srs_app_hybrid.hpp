@@ -29,6 +29,7 @@
 #include <vector>
 
 #include <srs_app_hourglass.hpp>
+#include <srs_app_threads.hpp>
 
 class SrsServer;
 class SrsServerAdapter;
@@ -49,9 +50,8 @@ public:
 };
 
 // The hybrid server manager.
-class SrsHybridServer : public ISrsFastTimer
+class SrsHybridServer : public ISrsFastTimer, public ISrsThreadResponder
 {
-    friend class SrsApiServer;
 private:
     std::vector<ISrsHybridServer*> servers;
     SrsFastTimer* timer_;
@@ -70,6 +70,8 @@ public:
 // interface ISrsFastTimer
 private:
     srs_error_t on_timer(srs_utime_t interval, srs_utime_t tick);
+private:
+    srs_error_t on_thread_message(SrsThreadMessage* msg, SrsThreadPipeChannel* channel);
 };
 
 extern SrsHybridServer* _srs_hybrid;

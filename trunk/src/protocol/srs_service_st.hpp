@@ -107,6 +107,7 @@ extern ssize_t srs_write(srs_netfd_t stfd, const void *buf, size_t nbyte, srs_ut
 extern bool srs_is_never_timeout(srs_utime_t tm);
 
 // The mutex locker.
+// TODO: FIXME: Rename _SRS to _srs
 #define SrsLocker(instance) \
     impl__SrsLocker _SRS_free_##instance(&instance)
 

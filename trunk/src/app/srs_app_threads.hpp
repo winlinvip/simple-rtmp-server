@@ -36,6 +36,7 @@
 #include <pthread.h>
 
 #include <vector>
+#include <map>
 #include <string>
 
 class SrsThreadPool;
@@ -43,6 +44,9 @@ class SrsAsyncSRTPTask;
 class SrsAsyncSRTPPacket;
 class SrsSecurityTransport;
 class SrsProcSelfStat;
+class SrsThreadMutex;
+class ISrsThreadResponder;
+struct SrsThreadMessage;
 
 // The pipe wraps the os pipes(fds).
 class SrsPipe
@@ -112,6 +116,82 @@ public:
     srs_error_t write(void* buf, size_t size, ssize_t* nwrite);
 };
 
+// A thread pipe channel, bidirectional data channel, between two threads.
+class SrsThreadPipeChannel : public ISrsCoroutineHandler
+{
+private:
+    // ThreadA write initiator, read by ThreadB.
+    SrsThreadPipePair* initiator_;
+    // ThreadB write responder, read by ThreadA.
+    SrsThreadPipePair* responder_;
+private:
+    // Coroutine for responder.
+    SrsFastCoroutine* trd_;
+    // The callback handler of responder.
+    ISrsThreadResponder* handler_;
+public:
+    SrsThreadPipeChannel();
+    virtual ~SrsThreadPipeChannel();
+public:
+    SrsThreadPipePair* initiator();
+    SrsThreadPipePair* responder();
+public:
+    // For responder, start a coroutine to read messages from initiator.
+    srs_error_t start(ISrsThreadResponder* h);
+private:
+    srs_error_t cycle();
+};
+
+// A slot contains a fixed number of channels to communicate with threads.
+class SrsThreadPipeSlot
+{
+private:
+    SrsThreadPipeChannel* channels_;
+    int nn_channels_;
+private:
+    // Current allocated index of slot for channels.
+    int index_;
+    SrsThreadMutex* lock_;
+public:
+    SrsThreadPipeSlot(int slots);
+    virtual ~SrsThreadPipeSlot();
+public:
+    srs_error_t initialize();
+    // Should only call by responder.
+    srs_error_t open_responder(ISrsThreadResponder* h);
+public:
+    // Allocate channel for initiator.
+    SrsThreadPipeChannel* allocate();
+};
+
+// The handler for responder, which got message from initiator.
+class ISrsThreadResponder
+{
+public:
+    ISrsThreadResponder();
+    virtual ~ISrsThreadResponder();
+public:
+    // Got a thread message msg from channel.
+    virtual srs_error_t on_thread_message(SrsThreadMessage* msg, SrsThreadPipeChannel* channel) = 0;
+};
+
+// The ID for messages between threads.
+enum SrsThreadMessageID
+{
+    // For SrsThreadMessageRtcCreateSession
+    SrsThreadMessageIDRtcCreateSession = 0x00000001,
+};
+
+// The message to marshal/unmarshal between threads.
+struct SrsThreadMessage
+{
+    // Convert with SrsThreadMessageID.
+    uint64_t id;
+    // Convert with struct pointers.
+    uint64_t ptr;
+    // TODO: FIXME: Add a trace ID?
+};
+
 // The thread mutex wrapper, without error.
 class SrsThreadMutex
 {
@@ -127,6 +207,7 @@ public:
 };
 
 // The thread mutex locker.
+// TODO: FIXME: Rename _SRS to _srs
 #define SrsThreadLocker(instance) \
     impl__SrsThreadLocker _SRS_free_##instance(instance)
 
@@ -216,6 +297,10 @@ public:
     bool cpuset_ok;
 public:
     SrsProcSelfStat* stat;
+    // The slot for other threads to communicate with this thread.
+    SrsThreadPipeSlot* slot_;
+    // The channels to communicate with other threads.
+    std::map<pthread_t, SrsThreadPipeChannel*> channels_;
 public:
     // The received UDP packets.
     SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;

@@ -29,6 +29,7 @@
 #include <srs_service_st.hpp>
 #include <srs_app_utility.hpp>
 #include <srs_app_threads.hpp>
+#include <srs_app_rtc_server.hpp>
 
 using namespace std;
 
@@ -190,6 +191,19 @@ srs_error_t SrsHybridServer::initialize()
         if ((err = server->initialize()) != srs_success) {
             return srs_error_wrap(err, "init server");
         }
+    }
+
+    // Create slots for other threads to communicate with us.
+    SrsThreadEntry* self = _srs_thread_pool->self();
+
+    self->slot_ = new SrsThreadPipeSlot(1);
+
+    if ((err = self->slot_->initialize()) != srs_success) {
+        return srs_error_wrap(err, "init slot");
+    }
+
+    if ((err = self->slot_->open_responder(this)) != srs_success) {
+        return srs_error_wrap(err, "init slot");
     }
 
     return err;
@@ -383,6 +397,49 @@ srs_error_t SrsHybridServer::on_timer(srs_utime_t interval, srs_utime_t tick)
         epoll_desc.c_str(), sched_desc.c_str(), clock_desc.c_str(),
         thread_desc.c_str(), free_desc.c_str(), objs_desc.c_str(), cache_desc.c_str()
     );
+
+    return err;
+}
+
+srs_error_t SrsHybridServer::on_thread_message(SrsThreadMessage* msg, SrsThreadPipeChannel* channel)
+{
+    srs_error_t err = srs_success;
+
+    RtcServerAdapter* adapter = NULL;
+    if (true) {
+        vector<ISrsHybridServer*> servers = _srs_hybrid->servers;
+        for (vector<ISrsHybridServer*>::iterator it = servers.begin(); it != servers.end(); ++it) {
+            RtcServerAdapter* server = dynamic_cast<RtcServerAdapter*>(*it);
+            if (server) {
+                adapter = server;
+                break;
+            }
+        }
+    }
+
+    // TODO: FIXME: Response error?
+    if (!adapter) {
+        return err;
+    }
+
+    if (msg->id == (uint64_t)SrsThreadMessageIDRtcCreateSession) {
+        SrsThreadMessageRtcCreateSession* s = (SrsThreadMessageRtcCreateSession*)msg->ptr;
+        err = adapter->rtc->create_session(s->req, s->remote_sdp, s->local_sdp, s->mock_eip,
+            s->publish, s->dtls, s->srtp, &s->session);
+
+        // TODO: FIXME: Response error?
+        if (err != srs_success) {
+            return srs_error_wrap(err, "create session");
+        }
+
+        // TODO: FIXME: Response timeout if error?
+        // TODO: FIXME: Response a different message? With trace ID?
+        // We're responder, write response to responder.
+        srs_error_t r0 = channel->responder()->write(msg, sizeof(SrsThreadMessage), NULL);
+        if (r0 != srs_success) {
+            srs_freep(r0); // Ignore any error.
+        }
+    }
 
     return err;
 }

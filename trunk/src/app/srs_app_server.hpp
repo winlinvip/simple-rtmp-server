@@ -41,6 +41,7 @@
 #include <srs_app_hourglass.hpp>
 #include <srs_app_hybrid.hpp>
 #include <srs_app_rtc_api.hpp>
+#include <srs_app_rtc_sdp.hpp>
 
 class SrsServer;
 class SrsHttpServeMux;
@@ -447,6 +448,23 @@ public:
     static srs_error_t start(void* arg);
 private:
     srs_error_t do_start();
+};
+
+// The RTC create session information.
+struct SrsThreadMessageRtcCreateSession
+{
+    // Input.
+    SrsRequest* req;
+    SrsSdp remote_sdp;
+    std::string mock_eip;
+    bool publish;
+    bool dtls;
+    bool srtp;
+
+    // Output.
+    SrsSdp local_sdp;
+    // TODO: FIXME: It's not thread-safe.
+    SrsRtcConnection* session;
 };
 
 #endif

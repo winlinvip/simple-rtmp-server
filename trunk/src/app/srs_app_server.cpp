@@ -1993,17 +1993,59 @@ srs_error_t SrsApiServer::create_session(
 ) {
     srs_error_t err = srs_success;
 
-    vector<ISrsHybridServer*> servers = _srs_hybrid->servers;
-    for (vector<ISrsHybridServer*>::iterator it = servers.begin(); it != servers.end(); ++it) {
-        RtcServerAdapter* adapter = dynamic_cast<RtcServerAdapter*>(*it);
-        if (!adapter) {
-            continue;
-        }
+    // Allocate slot to communicate with hybrid thread.
+    SrsThreadEntry* self = _srs_thread_pool->self();
+    SrsThreadEntry* hybrid = _srs_thread_pool->hybrid();
+    srs_assert(self && hybrid);
 
-        // TODO: FIXME: Should notify thread by thread-slot.
-        return adapter->rtc->create_session(req, remote_sdp, local_sdp, mock_eip,
-            publish, dtls, srtp, psession);
+    SrsThreadPipeChannel* channel = NULL;
+    if (true) {
+        map<pthread_t, SrsThreadPipeChannel*>::iterator it = self->channels_.find(hybrid->trd);
+        if (it == self->channels_.end()) {
+            self->channels_[hybrid->trd] = channel = hybrid->slot_->allocate();
+        } else {
+            channel = it->second;
+        }
     }
+    srs_assert(channel);
+
+    // We're initiator, write to initiator, read from responder.
+    if ((err = channel->initiator()->open_write()) != srs_success) {
+        return srs_error_wrap(err, "open write");
+    }
+    if ((err = channel->responder()->open_read()) != srs_success) {
+        return srs_error_wrap(err, "open read");
+    }
+
+    SrsThreadMessageRtcCreateSession s;
+    s.req = req;
+    s.remote_sdp = remote_sdp;
+    s.local_sdp = local_sdp;
+    s.mock_eip = mock_eip;
+    s.publish = publish;
+    s.dtls = dtls;
+    s.srtp = srtp;
+    s.session = NULL;
+
+    SrsThreadMessage m;
+    m.id = (uint64_t)SrsThreadMessageIDRtcCreateSession;
+    m.ptr = (uint64_t)&s;
+
+    // We're initiator, write to initiator, read from responder.
+    // TODO: FIXME: Write important logs, and error response, and timeout?
+    if ((err = channel->initiator()->write(&m, sizeof(m), NULL)) != srs_success) {
+        return srs_error_wrap(err, "write");
+    }
+
+    // TODO: FIXME: Write important logs, and error response, and timeout?
+    if ((err = channel->responder()->read(&m, sizeof(m), NULL)) != srs_success) {
+        return srs_error_wrap(err, "read");
+    }
+
+    // Covert to output params.
+    local_sdp = s.local_sdp;
+    // TODO: FIMXE: Should never return it, for it's not thread-safe.
+    *psession = s.session;
 
     return err;
 }

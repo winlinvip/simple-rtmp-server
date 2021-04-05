@@ -103,6 +103,10 @@ srs_error_t SrsPipe::initialize()
 {
     srs_error_t err = srs_success;
 
+    if (pipes_[0] > 0) {
+        return err;
+    }
+
     if (pipe(pipes_) < 0) {
         return srs_error_new(ERROR_SYSTEM_CREATE_PIPE, "create pipe");
     }
@@ -133,6 +137,10 @@ SrsThreadPipe::~SrsThreadPipe()
 srs_error_t SrsThreadPipe::initialize(int fd)
 {
     srs_error_t err = srs_success;
+
+    if (stfd_) {
+        return err;
+    }
 
     if ((stfd_ = srs_netfd_open(fd)) == NULL) {
         return srs_error_new(ERROR_PIPE_OPEN, "open pipe");
@@ -220,6 +228,134 @@ srs_error_t SrsThreadPipePair::write(void* buf, size_t size, ssize_t* nwrite)
     return wpipe_->write(buf, size, nwrite);
 }
 
+SrsThreadPipeChannel::SrsThreadPipeChannel()
+{
+    initiator_ = new SrsThreadPipePair();
+    responder_ = new SrsThreadPipePair();
+
+    trd_ = new SrsFastCoroutine("chan", this);
+    handler_ = NULL;
+}
+
+SrsThreadPipeChannel::~SrsThreadPipeChannel()
+{
+    srs_freep(trd_);
+    srs_freep(initiator_);
+    srs_freep(responder_);
+}
+
+SrsThreadPipePair* SrsThreadPipeChannel::initiator()
+{
+    return initiator_;
+}
+
+SrsThreadPipePair* SrsThreadPipeChannel::responder()
+{
+    return responder_;
+}
+
+srs_error_t SrsThreadPipeChannel::start(ISrsThreadResponder* h)
+{
+    handler_ = h;
+    return trd_->start();
+}
+
+srs_error_t SrsThreadPipeChannel::cycle()
+{
+    srs_error_t err = srs_success;
+
+    while (true) {
+        if ((err = trd_->pull()) != srs_success) {
+            return srs_error_wrap(err, "pull");
+        }
+
+        // Here we're responder, read from initiator.
+        SrsThreadMessage m;
+        if ((err = initiator_->read(&m, sizeof(m), NULL)) != srs_success) {
+            return srs_error_wrap(err, "read");
+        }
+
+        // Consume the message, the responder can write response to responder.
+        if (handler_ && (err = handler_->on_thread_message(&m, this)) != srs_success) {
+            return srs_error_wrap(err, "consume");
+        }
+    }
+
+    return err;
+}
+
+SrsThreadPipeSlot::SrsThreadPipeSlot(int slots)
+{
+    nn_channels_ = slots;
+    channels_ = new SrsThreadPipeChannel[slots];
+
+    index_ = 0;
+    lock_ = new SrsThreadMutex();
+}
+
+SrsThreadPipeSlot::~SrsThreadPipeSlot()
+{
+    srs_freepa(channels_);
+    srs_freep(lock_);
+}
+
+srs_error_t SrsThreadPipeSlot::initialize()
+{
+    srs_error_t err = srs_success;
+
+    for (int i = 0; i < nn_channels_; i++) {
+        SrsThreadPipeChannel* channel = &channels_[i];
+
+        // Here we're responder, but it's ok to initialize the initiator.
+        if ((err = channel->initiator()->initialize()) != srs_success) {
+            return srs_error_wrap(err, "init %d initiator", i);
+        }
+        if ((err = channel->responder()->initialize()) != srs_success) {
+            return srs_error_wrap(err, "init %d responder", i);
+        }
+    }
+
+    return err;
+}
+
+srs_error_t SrsThreadPipeSlot::open_responder(ISrsThreadResponder* h)
+{
+    srs_error_t err = srs_success;
+
+    for (int i = 0; i < nn_channels_; i++) {
+        SrsThreadPipeChannel* channel = &channels_[i];
+
+        // We're responder, read from initiator, write to responder.
+        if ((err = channel->initiator()->open_read()) != srs_success) {
+            return srs_error_wrap(err, "open read");
+        }
+        if ((err = channel->responder()->open_write()) != srs_success) {
+            return srs_error_wrap(err, "open write");
+        }
+
+        // OK, we start the cycle coroutine for responder.
+        if ((err = channel->start(h)) != srs_success) {
+            return srs_error_wrap(err, "start %d consume coroutine", i);
+        }
+    }
+
+    return err;
+}
+
+SrsThreadPipeChannel* SrsThreadPipeSlot::allocate()
+{
+    SrsThreadLocker(lock_);
+    return index_ < nn_channels_? &channels_[index_++] : NULL;
+}
+
+ISrsThreadResponder::ISrsThreadResponder()
+{
+}
+
+ISrsThreadResponder::~ISrsThreadResponder()
+{
+}
+
 SrsThreadMutex::SrsThreadMutex()
 {
     // https://man7.org/linux/man-pages/man3/pthread_mutexattr_init.3.html
@@ -276,6 +412,7 @@ SrsThreadEntry::SrsThreadEntry()
     cpuset_ok = false;
 
     stat = new SrsProcSelfStat();
+    slot_ = NULL;
 
     received_packets_ = new SrsThreadQueue<SrsUdpMuxSocket>();
     cooked_packets_ = new SrsThreadQueue<SrsAsyncSRTPPacket>();
@@ -285,6 +422,9 @@ SrsThreadEntry::~SrsThreadEntry()
 {
     srs_freep(stat);
     srs_freep(err);
+
+    // TODO: FIXME: Before free slot, we MUST close pipes in threads that open them.
+    srs_freep(slot_);
 
     srs_freep(received_packets_);
     srs_freep(cooked_packets_);
