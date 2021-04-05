@@ -84,6 +84,17 @@ enum SrsListenerType
     SrsListenerHttpsStream = 9,
 };
 
+// To mux the tcp handler.
+class ISrsTcpMuxHandler
+{
+public:
+    ISrsTcpMuxHandler();
+    virtual ~ISrsTcpMuxHandler();
+public:
+    // Accept the TCP client, which is identified by type.
+    virtual srs_error_t accept_tcp_client(SrsListenerType type, srs_netfd_t stfd) = 0;
+};
+
 // A common tcp listener, for RTMP/HTTP server.
 class SrsListener
 {
@@ -92,9 +103,9 @@ protected:
 protected:
     std::string ip;
     int port;
-    SrsServer* server;
+    ISrsTcpMuxHandler* server;
 public:
-    SrsListener(SrsServer* svr, SrsListenerType t);
+    SrsListener(ISrsTcpMuxHandler* svr, SrsListenerType t);
     virtual ~SrsListener();
 public:
     virtual SrsListenerType listen_type();
@@ -107,7 +118,7 @@ class SrsBufferListener : virtual public SrsListener, virtual public ISrsTcpHand
 private:
     SrsTcpListener* listener;
 public:
-    SrsBufferListener(SrsServer* server, SrsListenerType type);
+    SrsBufferListener(ISrsTcpMuxHandler* server, SrsListenerType type);
     virtual ~SrsBufferListener();
 public:
     virtual srs_error_t listen(std::string ip, int port);
@@ -264,11 +275,9 @@ public:
 // SRS RTMP server, initialize and listen, start connection service thread, destroy client.
 class SrsServer : virtual public ISrsReloadHandler, virtual public ISrsSourceHandler
     , virtual public ISrsResourceManager, virtual public ISrsCoroutineHandler
-    , virtual public ISrsHourGlass
+    , virtual public ISrsHourGlass, public ISrsTcpMuxHandler
 {
 private:
-    // TODO: FIXME: Extract an HttpApiServer.
-    SrsHttpServeMux* http_api_mux;
     SrsHttpServer* http_server;
     SrsHttpHeartbeat* http_heartbeat;
     SrsIngester* ingester;
@@ -319,7 +328,6 @@ public:
     virtual srs_error_t acquire_pid_file();
     virtual srs_error_t listen();
     virtual srs_error_t register_signal();
-    virtual srs_error_t http_handle();
     virtual srs_error_t ingest();
     virtual srs_error_t start();
 // interface ISrsCoroutineHandler
@@ -353,8 +361,6 @@ private:
 private:
     // listen at specified protocol.
     virtual srs_error_t listen_rtmp();
-    virtual srs_error_t listen_http_api();
-    virtual srs_error_t listen_https_api();
     virtual srs_error_t listen_http_stream();
     virtual srs_error_t listen_https_stream();
     virtual srs_error_t listen_stream_caster();
@@ -366,19 +372,11 @@ private:
     virtual void close_listeners(SrsListenerType type);
     // Resample the server kbs.
     virtual void resample_kbps();
-// For internal only
-public:
-    // When listener got a fd, notice server to accept it.
-    // @param type, the client type, used to create concrete connection,
-    //       for instance RTMP connection to serve client.
-    // @param stfd, the client fd in st boxed, the underlayer fd.
-    virtual srs_error_t accept_client(SrsListenerType type, srs_netfd_t stfd);
-    // TODO: FIXME: Fetch from hybrid server manager.
-    virtual SrsHttpServeMux* api_server();
 private:
+    virtual srs_error_t accept_tcp_client(SrsListenerType type, srs_netfd_t stfd);
     virtual srs_error_t fd_to_resource(SrsListenerType type, srs_netfd_t stfd, ISrsStartableConneciton** pr);
 // Interface ISrsResourceManager
-public:
+private:
     // A callback for connection to remove itself.
     // When connection thread cycle terminated, callback this to delete connection.
     // @see SrsTcpConnection.on_thread_stop().
@@ -414,6 +412,35 @@ public:
     virtual void stop();
 public:
     virtual SrsServer* instance();
+};
+
+// The HTTP API server.
+class SrsApiServer : public ISrsTcpMuxHandler, public ISrsResourceManager
+{
+private:
+    SrsBufferListener* http_;
+    SrsBufferListener* https_;
+    SrsHttpServeMux* http_api_mux_;
+    SrsResourceManager* conn_manager_;
+public:
+    SrsApiServer();
+    virtual ~SrsApiServer();
+public:
+    virtual srs_error_t initialize();
+private:
+    virtual srs_error_t listen_http_api();
+    virtual srs_error_t listen_https_api();
+private:
+    virtual srs_error_t accept_tcp_client(SrsListenerType type, srs_netfd_t stfd);
+    virtual srs_error_t fd_to_resource(SrsListenerType type, srs_netfd_t stfd, ISrsStartableConneciton** pr);
+    virtual void remove(ISrsResource* c);
+private:
+    virtual srs_error_t http_handle();
+    srs_error_t listen_api();
+public:
+    static srs_error_t start(void* arg);
+private:
+    srs_error_t do_start();
 };
 
 #endif

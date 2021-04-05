@@ -110,7 +110,6 @@ public:
     // TODO: FIXME: Support reload.
     srs_error_t listen_udp();
     virtual srs_error_t on_udp_packet(SrsUdpMuxSocket* skt);
-    srs_error_t listen_api();
 public:
     // Peer start offering, we answer it.
     srs_error_t create_session(

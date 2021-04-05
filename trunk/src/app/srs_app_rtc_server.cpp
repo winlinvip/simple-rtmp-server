@@ -498,30 +498,6 @@ srs_error_t SrsRtcServer::on_udp_packet(SrsUdpMuxSocket* skt)
     return srs_error_new(ERROR_RTC_UDP, "unknown packet");
 }
 
-srs_error_t SrsRtcServer::listen_api()
-{
-    srs_error_t err = srs_success;
-
-    // TODO: FIXME: Fetch api from hybrid manager, not from SRS.
-    SrsHttpServeMux* http_api_mux = _srs_hybrid->srs()->instance()->api_server();
-
-    if ((err = http_api_mux->handle("/rtc/v1/play/", new SrsGoApiRtcPlay(this))) != srs_success) {
-        return srs_error_wrap(err, "handle play");
-    }
-
-    if ((err = http_api_mux->handle("/rtc/v1/publish/", new SrsGoApiRtcPublish(this))) != srs_success) {
-        return srs_error_wrap(err, "handle publish");
-    }
-
-#ifdef SRS_SIMULATOR
-    if ((err = http_api_mux->handle("/rtc/v1/nack/", new SrsGoApiRtcNACK(this))) != srs_success) {
-        return srs_error_wrap(err, "handle nack");
-    }
-#endif
-
-    return err;
-}
-
 srs_error_t SrsRtcServer::create_session(
     SrsRequest* req, const SrsSdp& remote_sdp, SrsSdp& local_sdp, const std::string& mock_eip,
     bool publish, bool dtls, bool srtp,
@@ -774,10 +750,6 @@ srs_error_t RtcServerAdapter::run()
 
     if ((err = rtc->listen_udp()) != srs_success) {
         return srs_error_wrap(err, "listen udp");
-    }
-
-    if ((err = rtc->listen_api()) != srs_success) {
-        return srs_error_wrap(err, "listen api");
     }
 
     if ((err = _srs_rtc_manager->start()) != srs_success) {
