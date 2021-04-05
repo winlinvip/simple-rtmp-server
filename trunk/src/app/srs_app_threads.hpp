@@ -112,7 +112,7 @@ public:
 
 // Allocate a(or almost) fixed thread poll to execute tasks,
 // so that we can take the advantage of multiple CPUs.
-class SrsThreadPool : public ISrsCoroutineHandler
+class SrsThreadPool
 {
 private:
     SrsThreadEntry* entry_;
@@ -136,9 +136,6 @@ private:
     int critical_pulse_;
     int dying_threshold_;
     int dying_pulse_;
-private:
-    // A coroutine to consume cooked packets.
-    SrsFastCoroutine* trd_;
 public:
     SrsThreadPool();
     virtual ~SrsThreadPool();
@@ -159,11 +156,6 @@ public:
     void stop();
 private:
     static void* start(void* arg);
-public:
-    // Consume packets. Must call in worker/service thread.
-    virtual srs_error_t consume();
-private:
-    srs_error_t cycle();
 };
 
 // The global thread pool.

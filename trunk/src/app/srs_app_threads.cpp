@@ -158,8 +158,6 @@ SrsThreadPool::SrsThreadPool()
     hybrid_critical_water_level_ = 0;
     hybrid_dying_water_level_ = 0;
 
-    trd_ = new SrsFastCoroutine("pool", this);
-
     high_threshold_ = 0;
     high_pulse_ = 0;
     critical_threshold_ = 0;
@@ -188,8 +186,6 @@ SrsThreadPool::SrsThreadPool()
 // TODO: FIMXE: If free the pool, we should stop all threads.
 SrsThreadPool::~SrsThreadPool()
 {
-    srs_freep(trd_);
-
     srs_freep(lock_);
 }
 
@@ -494,49 +490,6 @@ void* SrsThreadPool::start(void* arg)
 
     // We do not use the return value, the err has been set to entry->err.
     return NULL;
-}
-
-srs_error_t SrsThreadPool::consume()
-{
-    srs_error_t err = srs_success;
-
-    if ((err = trd_->start()) != srs_success) {
-        return srs_error_wrap(err, "start");
-    }
-
-    return err;
-}
-
-srs_error_t SrsThreadPool::cycle()
-{
-    srs_error_t err = srs_success;
-
-    while (true) {
-        int consumed = 0;
-
-        // Check error before consume packets.
-        if ((err = trd_->pull()) != srs_success) {
-            return srs_error_wrap(err, "pull");
-        }
-        if ((err = _srs_async_recv->consume(&consumed)) != srs_success) {
-            srs_error_reset(err); // Ignore any error.
-        }
-
-        // Check error before consume packets.
-        if ((err = trd_->pull()) != srs_success) {
-            return srs_error_wrap(err, "pull");
-        }
-        if ((err = _srs_async_srtp->consume(&consumed)) != srs_success) {
-            srs_error_reset(err); // Ignore any error.
-        }
-
-        if (!consumed) {
-            srs_usleep(20 * SRS_UTIME_MILLISECONDS);
-            continue;
-        }
-    }
-
-    return err;
 }
 
 // TODO: FIXME: It should be thread-local or thread-safe.
