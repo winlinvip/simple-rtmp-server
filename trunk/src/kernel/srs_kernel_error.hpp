@@ -120,6 +120,9 @@
 #define ERROR_SOCKET_ACCEPT                 1081
 #define ERROR_THREAD_CREATE                 1082
 #define ERROR_SYSTEM_LOGFILE                1083
+#define ERROR_PIPE_OPEN                     1084
+#define ERROR_PIPE_READ                     1085
+#define ERROR_PIPE_WRITE                    1086
 
 ///////////////////////////////////////////////////////
 // RTMP protocol error.

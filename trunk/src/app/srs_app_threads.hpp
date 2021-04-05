@@ -44,6 +44,74 @@ class SrsAsyncSRTPPacket;
 class SrsSecurityTransport;
 class SrsProcSelfStat;
 
+// The pipe wraps the os pipes(fds).
+class SrsPipe
+{
+private:
+    // The max buffer size of pipe is PIPE_BUF, so if we used to transmit signals(int),
+    // up to PIPE_BUF/sizeof(int) signals can be queued up.
+    // @see https://man7.org/linux/man-pages/man2/pipe.2.html
+    int pipes_[2];
+public:
+    SrsPipe();
+    virtual ~SrsPipe();
+public:
+    srs_error_t initialize();
+public:
+    int read_fd();
+    int write_fd();
+};
+
+// The pipe to communicate between thread-local ST of threads.
+class SrsThreadPipe
+{
+private:
+    srs_netfd_t stfd_;
+public:
+    SrsThreadPipe();
+    virtual ~SrsThreadPipe();
+public:
+    // Open fd by ST, should be free by the same thread.
+    srs_error_t initialize(int fd);
+public:
+    // Note that the pipe is unidirectional data channel, so only one of
+    // read/write is available.
+    srs_error_t read(void* buf, size_t size, ssize_t* nread);
+    srs_error_t write(void* buf, size_t size, ssize_t* nwrite);
+};
+
+// A thread pipe pair, to communicate between threads.
+// @remark If thread A open read, then it MUST close the read.
+class SrsThreadPipePair
+{
+private:
+    // Per-process pipe which is used as a signal queue.
+    // Up to PIPE_BUF/sizeof(int) signals can be queued up.
+    SrsPipe* pipe_;
+    SrsThreadPipe* rpipe_;
+    SrsThreadPipe* wpipe_;
+public:
+    SrsThreadPipePair();
+    virtual ~SrsThreadPipePair();
+public:
+    // It's ok to initialize pipe in another threads.
+    srs_error_t initialize();
+public:
+    // It's ok to open read/write in one or two threads.
+    srs_error_t open_read();
+    srs_error_t open_write();
+public:
+    // For multiple-threading, if a thread open the pipe, it MUST close it, never close it by
+    // another thread which has not open it.
+    // If pair(read/write) alive in one thread, user can directly free the pair, without closing
+    // the read/write, because it's in the same thread.
+    void close_read();
+    void close_write();
+public:
+    srs_error_t read(void* buf, size_t size, ssize_t* nread);
+    srs_error_t write(void* buf, size_t size, ssize_t* nwrite);
+};
+
 // The thread mutex wrapper, without error.
 class SrsThreadMutex
 {

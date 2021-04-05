@@ -404,39 +404,42 @@ SrsSignalManager* SrsSignalManager::instance = NULL;
 SrsSignalManager::SrsSignalManager(SrsServer* s)
 {
     SrsSignalManager::instance = this;
-    
+
+    pipe_ = new SrsThreadPipePair();
+
     server = s;
-    sig_pipe[0] = sig_pipe[1] = -1;
     trd = new SrsSTCoroutine("signal", this, _srs_context->get_id());
-    signal_read_stfd = NULL;
 }
 
 SrsSignalManager::~SrsSignalManager()
 {
-    srs_close_stfd(signal_read_stfd);
-    
-    if (sig_pipe[0] > 0) {
-        ::close(sig_pipe[0]);
-    }
-    if (sig_pipe[1] > 0) {
-        ::close(sig_pipe[1]);
-    }
-    
     srs_freep(trd);
+
+    // Note that it's optional, because the read/write pair is in the same thread.
+    pipe_->close_read();
+    pipe_->close_write();
+
+    // If in the same thread, we could directly free the pipe, which will close all FDs.
+    srs_freep(pipe_);
 }
 
 srs_error_t SrsSignalManager::initialize()
 {
-    /* Create signal pipe */
-    if (pipe(sig_pipe) < 0) {
-        return srs_error_new(ERROR_SYSTEM_CREATE_PIPE, "create pipe");
+    srs_error_t err = srs_success;
+
+    if ((err = pipe_->initialize()) != srs_success) {
+        return srs_error_wrap(err, "init pipe");
     }
-    
-    if ((signal_read_stfd = srs_netfd_open(sig_pipe[0])) == NULL) {
-        return srs_error_new(ERROR_SYSTEM_CREATE_PIPE, "open pipe");
+
+    if ((err = pipe_->open_read()) != srs_success) {
+        return srs_error_wrap(err, "init read pipe");
     }
-    
-    return srs_success;
+
+    if ((err = pipe_->open_write()) != srs_success) {
+        return srs_error_wrap(err, "init write pipe");
+    }
+
+    return err;
 }
 
 srs_error_t SrsSignalManager::start()
@@ -496,11 +499,12 @@ srs_error_t SrsSignalManager::cycle()
         }
         
         int signo;
+        // Read the next signal from the pipe
+        if ((err = pipe_->read(&signo, sizeof(int), NULL)) != srs_success) {
+            srs_freep(err); // Ignore any error.
+        }
         
-        /* Read the next signal from the pipe */
-        srs_read(signal_read_stfd, &signo, sizeof(int), SRS_UTIME_NO_TIMEOUT);
-        
-        /* Process signal synchronously */
+        // Process signal synchronously
         server->on_signal(signo);
     }
     
@@ -511,13 +515,15 @@ void SrsSignalManager::sig_catcher(int signo)
 {
     int err;
     
-    /* Save errno to restore it after the write() */
+    // Save errno to restore it after the write()
     err = errno;
-    
-    /* write() is reentrant/async-safe */
-    int fd = SrsSignalManager::instance->sig_pipe[1];
-    write(fd, &signo, sizeof(int));
-    
+
+    // write() is reentrant/async-safe
+    srs_error_t r0 = SrsSignalManager::instance->pipe_->write(&signo, sizeof(int), NULL);
+    if (r0 != srs_success) {
+        srs_freep(r0); // Ignore any error.
+    }
+
     errno = err;
 }
 

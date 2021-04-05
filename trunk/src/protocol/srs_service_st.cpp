@@ -457,6 +457,11 @@ ssize_t srs_read(srs_netfd_t stfd, void *buf, size_t nbyte, srs_utime_t timeout)
     return st_read((st_netfd_t)stfd, buf, nbyte, (st_utime_t)timeout);
 }
 
+ssize_t srs_write(srs_netfd_t stfd, const void *buf, size_t nbyte, srs_utime_t timeout)
+{
+    return st_write((st_netfd_t)stfd, buf, nbyte, (st_utime_t)timeout);
+}
+
 bool srs_is_never_timeout(srs_utime_t tm)
 {
     return tm == SRS_UTIME_NO_TIMEOUT;

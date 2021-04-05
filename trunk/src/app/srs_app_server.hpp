@@ -57,7 +57,7 @@ class SrsAppCasterFlv;
 class SrsRtspCaster;
 class SrsResourceManager;
 class SrsGb28181Caster;
-
+class SrsThreadPipePair;
 
 // The listener type for server to identify the connection,
 // that is, use different type to process the connection.
@@ -215,8 +215,7 @@ class SrsSignalManager : public ISrsCoroutineHandler
 private:
     // Per-process pipe which is used as a signal queue.
     // Up to PIPE_BUF/sizeof(int) signals can be queued up.
-    int sig_pipe[2];
-    srs_netfd_t signal_read_stfd;
+    SrsThreadPipePair* pipe_;
 private:
     SrsServer* server;
     SrsCoroutine* trd;

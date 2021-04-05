@@ -83,6 +83,143 @@ uint64_t srs_covert_cpuset(cpu_set_t v)
 #endif
 }
 
+SrsPipe::SrsPipe()
+{
+    pipes_[0] = pipes_[1] = -1;
+}
+
+SrsPipe::~SrsPipe()
+{
+    // Close the FDs because we might not open it as stfd.
+    if (pipes_[0] > 0) {
+        ::close(pipes_[0]);
+    }
+    if (pipes_[1] > 0) {
+        ::close(pipes_[1]);
+    }
+}
+
+srs_error_t SrsPipe::initialize()
+{
+    srs_error_t err = srs_success;
+
+    if (pipe(pipes_) < 0) {
+        return srs_error_new(ERROR_SYSTEM_CREATE_PIPE, "create pipe");
+    }
+
+    return err;
+}
+
+int SrsPipe::read_fd()
+{
+    return pipes_[0];
+}
+
+int SrsPipe::write_fd()
+{
+    return pipes_[1];
+}
+
+SrsThreadPipe::SrsThreadPipe()
+{
+    stfd_ = NULL;
+}
+
+SrsThreadPipe::~SrsThreadPipe()
+{
+    srs_close_stfd(stfd_);
+}
+
+srs_error_t SrsThreadPipe::initialize(int fd)
+{
+    srs_error_t err = srs_success;
+
+    if ((stfd_ = srs_netfd_open(fd)) == NULL) {
+        return srs_error_new(ERROR_PIPE_OPEN, "open pipe");
+    }
+
+    return err;
+}
+
+srs_error_t SrsThreadPipe::read(void* buf, size_t size, ssize_t* nread)
+{
+    ssize_t nn = srs_read(stfd_, buf, size, SRS_UTIME_NO_TIMEOUT);
+
+    if (nread) {
+        *nread = nn;
+    }
+
+    if (nn < 0) {
+        return srs_error_new(ERROR_PIPE_READ, "read");
+    }
+
+    return srs_success;
+}
+
+srs_error_t SrsThreadPipe::write(void* buf, size_t size, ssize_t* nwrite)
+{
+    ssize_t nn = srs_write(stfd_, buf, size, SRS_UTIME_NO_TIMEOUT);
+
+    if (nwrite) {
+        *nwrite = nn;
+    }
+
+    if (nn < 0) {
+        return srs_error_new(ERROR_PIPE_WRITE, "write");
+    }
+
+    return srs_success;
+}
+
+SrsThreadPipePair::SrsThreadPipePair()
+{
+    pipe_ = new SrsPipe();
+    rpipe_ = new SrsThreadPipe();
+    wpipe_ = new SrsThreadPipe();
+}
+
+SrsThreadPipePair::~SrsThreadPipePair()
+{
+    close_read();
+    close_write();
+    srs_freep(pipe_);
+}
+
+srs_error_t SrsThreadPipePair::initialize()
+{
+    return pipe_->initialize();
+}
+
+srs_error_t SrsThreadPipePair::open_read()
+{
+    return rpipe_->initialize(pipe_->read_fd());
+}
+
+srs_error_t SrsThreadPipePair::open_write()
+{
+    return wpipe_->initialize(pipe_->write_fd());
+}
+
+void SrsThreadPipePair::close_read()
+{
+    srs_freep(rpipe_);
+}
+
+void SrsThreadPipePair::close_write()
+{
+    srs_freep(wpipe_);
+}
+
+srs_error_t SrsThreadPipePair::read(void* buf, size_t size, ssize_t* nread)
+{
+    return rpipe_->read(buf, size, nread);
+}
+
+srs_error_t SrsThreadPipePair::write(void* buf, size_t size, ssize_t* nwrite)
+{
+    return wpipe_->write(buf, size, nwrite);
+}
+
 SrsThreadMutex::SrsThreadMutex()
 {
     // https://man7.org/linux/man-pages/man3/pthread_mutexattr_init.3.html
