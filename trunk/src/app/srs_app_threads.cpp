@@ -36,6 +36,7 @@
 #include <srs_app_rtc_source.hpp>
 #include <srs_kernel_rtc_rtp.hpp>
 #include <srs_app_pithy_print.hpp>
+#include <srs_protocol_kbps.hpp>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -55,23 +56,23 @@ using namespace std;
 
 #include <srs_protocol_kbps.hpp>
 
-extern SrsPps* _srs_pps_rloss;
-extern SrsPps* _srs_pps_aloss;
-extern SrsPps* _srs_pps_aloss2;
+extern __thread SrsPps* _srs_pps_rloss;
+extern __thread SrsPps* _srs_pps_aloss;
+extern __thread SrsPps* _srs_pps_aloss2;
 
-extern SrsPps* _srs_pps_snack2;
-extern SrsPps* _srs_pps_snack3;
-extern SrsPps* _srs_pps_snack4;
+extern __thread SrsPps* _srs_pps_snack2;
+extern __thread SrsPps* _srs_pps_snack3;
+extern __thread SrsPps* _srs_pps_snack4;
 
-SrsPps* _srs_thread_sync_10us = new SrsPps();
-SrsPps* _srs_thread_sync_100us = new SrsPps();
-SrsPps* _srs_thread_sync_1000us = new SrsPps();
-SrsPps* _srs_thread_sync_plus = new SrsPps();
+__thread SrsPps* _srs_thread_sync_10us = NULL;
+__thread SrsPps* _srs_thread_sync_100us = NULL;
+__thread SrsPps* _srs_thread_sync_1000us = NULL;
+__thread SrsPps* _srs_thread_sync_plus = NULL;
 
-SrsPps* _srs_tunnel_recv_raw = new SrsPps();
-SrsPps* _srs_tunnel_recv_hit = new SrsPps();
-SrsPps* _srs_tunnel_send_raw = new SrsPps();
-SrsPps* _srs_tunnel_send_hit = new SrsPps();
+__thread SrsPps* _srs_tunnel_recv_raw = NULL;
+__thread SrsPps* _srs_tunnel_recv_hit = NULL;
+__thread SrsPps* _srs_tunnel_send_raw = NULL;
+__thread SrsPps* _srs_tunnel_send_hit = NULL;
 
 extern bool srs_is_rtp_or_rtcp(const uint8_t* data, size_t len);
 extern bool srs_is_rtcp(const uint8_t* data, size_t len);
@@ -510,6 +511,99 @@ bool SrsThreadPool::hybrid_dying_water_level()
 extern const int LOG_MAX_SIZE;
 extern __thread char* _srs_log_data;
 extern __thread SrsStageManager* _srs_stages;
+extern __thread SrsPps* _srs_pps_ids;
+extern __thread SrsPps* _srs_pps_fids;
+extern __thread SrsPps* _srs_pps_fids_level0;
+extern __thread SrsPps* _srs_pps_dispose;
+extern __thread SrsPps* _srs_pps_timer;
+extern __thread SrsPps* _srs_pps_clock_15ms;
+extern __thread SrsPps* _srs_pps_clock_20ms;
+extern __thread SrsPps* _srs_pps_clock_25ms;
+extern __thread SrsPps* _srs_pps_clock_30ms;
+extern __thread SrsPps* _srs_pps_clock_35ms;
+extern __thread SrsPps* _srs_pps_clock_40ms;
+extern __thread SrsPps* _srs_pps_clock_80ms;
+extern __thread SrsPps* _srs_pps_clock_160ms;
+extern __thread SrsPps* _srs_pps_timer_s;
+extern __thread SrsPps* _srs_pps_rpkts;
+extern __thread SrsPps* _srs_pps_addrs;
+extern __thread SrsPps* _srs_pps_fast_addrs;
+extern __thread SrsPps* _srs_pps_spkts;
+extern __thread SrsPps* _srs_pps_sstuns;
+extern __thread SrsPps* _srs_pps_srtcps;
+extern __thread SrsPps* _srs_pps_srtps;
+extern __thread SrsPps* _srs_pps_pli;
+extern __thread SrsPps* _srs_pps_twcc;
+extern __thread SrsPps* _srs_pps_rr;
+extern __thread SrsPps* _srs_pps_pub;
+extern __thread SrsPps* _srs_pps_conn;
+extern __thread SrsPps* _srs_pps_rstuns;
+extern __thread SrsPps* _srs_pps_rrtps;
+extern __thread SrsPps* _srs_pps_rrtcps;
+extern __thread SrsPps* _srs_pps_snack;
+extern __thread SrsPps* _srs_pps_snack2;
+extern __thread SrsPps* _srs_pps_snack3;
+extern __thread SrsPps* _srs_pps_snack4;
+extern __thread SrsPps* _srs_pps_sanack;
+extern __thread SrsPps* _srs_pps_svnack;
+extern __thread SrsPps* _srs_pps_rnack;
+extern __thread SrsPps* _srs_pps_rnack2;
+extern __thread SrsPps* _srs_pps_rhnack;
+extern __thread SrsPps* _srs_pps_rmnack;
+extern __thread SrsPps* _srs_thread_sync_10us;
+extern __thread SrsPps* _srs_thread_sync_100us;
+extern __thread SrsPps* _srs_thread_sync_1000us;
+extern __thread SrsPps* _srs_thread_sync_plus;
+extern __thread SrsPps* _srs_tunnel_recv_raw;
+extern __thread SrsPps* _srs_tunnel_recv_hit;
+extern __thread SrsPps* _srs_tunnel_send_raw;
+extern __thread SrsPps* _srs_tunnel_send_hit;
+extern __thread SrsPps* _srs_pps_rloss;
+extern __thread SrsPps* _srs_pps_sloss;
+extern __thread SrsPps* _srs_pps_aloss;
+extern __thread SrsPps* _srs_pps_aloss2;
+extern __thread SrsPps* _srs_pps_objs_msgs;
+extern __thread SrsPps* _srs_pps_objs_rtps;
+extern __thread SrsPps* _srs_pps_objs_rraw;
+extern __thread SrsPps* _srs_pps_objs_rfua;
+extern __thread SrsPps* _srs_pps_objs_rbuf;
+extern __thread SrsPps* _srs_pps_objs_rothers;
+extern __thread SrsPps* _srs_pps_objs_drop;
+extern __thread SrsPps* _srs_pps_cids_get;
+extern __thread SrsPps* _srs_pps_cids_set;
+#if defined(SRS_DEBUG) && defined(SRS_DEBUG_STATS)
+extern __thread SrsPps* _srs_pps_recvfrom;
+extern __thread SrsPps* _srs_pps_recvfrom_eagain;
+extern __thread SrsPps* _srs_pps_sendto;
+extern __thread SrsPps* _srs_pps_sendto_eagain;
+extern __thread SrsPps* _srs_pps_read;
+extern __thread SrsPps* _srs_pps_read_eagain;
+extern __thread SrsPps* _srs_pps_readv;
+extern __thread SrsPps* _srs_pps_readv_eagain;
+extern __thread SrsPps* _srs_pps_writev;
+extern __thread SrsPps* _srs_pps_writev_eagain;
+extern __thread SrsPps* _srs_pps_recvmsg;
+extern __thread SrsPps* _srs_pps_recvmsg_eagain;
+extern __thread SrsPps* _srs_pps_sendmsg;
+extern __thread SrsPps* _srs_pps_sendmsg_eagain;
+extern __thread SrsPps* _srs_pps_epoll;
+extern __thread SrsPps* _srs_pps_epoll_zero;
+extern __thread SrsPps* _srs_pps_epoll_shake;
+extern __thread SrsPps* _srs_pps_epoll_spin;
+extern __thread SrsPps* _srs_pps_sched_15ms;
+extern __thread SrsPps* _srs_pps_sched_20ms;
+extern __thread SrsPps* _srs_pps_sched_25ms;
+extern __thread SrsPps* _srs_pps_sched_30ms;
+extern __thread SrsPps* _srs_pps_sched_35ms;
+extern __thread SrsPps* _srs_pps_sched_40ms;
+extern __thread SrsPps* _srs_pps_sched_80ms;
+extern __thread SrsPps* _srs_pps_sched_160ms;
+extern __thread SrsPps* _srs_pps_sched_s;
+extern __thread SrsPps* _srs_pps_thread_run;
+extern __thread SrsPps* _srs_pps_thread_idle;
+extern __thread SrsPps* _srs_pps_thread_yield;
+extern __thread SrsPps* _srs_pps_thread_yield2;
+#endif
 
 // Setup the thread-local variables, MUST call when each thread starting.
 srs_error_t SrsThreadPool::setup()
@@ -519,11 +613,6 @@ srs_error_t SrsThreadPool::setup()
     // Initialize the log shared buffer for threads.
     srs_assert(!_srs_log_data);
     _srs_log_data = new char[LOG_MAX_SIZE];
-
-    // MUST init ST for each thread, because ST is thread-local now.
-    if ((err = srs_st_init()) != srs_success) {
-        return srs_error_wrap(err, "init st");
-    }
 
     // Create the hybrid RTMP/HTTP/RTC server.
     _srs_hybrid = new SrsHybridServer();
@@ -549,6 +638,106 @@ srs_error_t SrsThreadPool::setup()
 
     // The pithy print for each thread.
     _srs_stages = new SrsStageManager();
+
+    // The pps stat.
+    _srs_pps_ids = new SrsPps();
+    _srs_pps_fids = new SrsPps();
+    _srs_pps_fids_level0 = new SrsPps();
+    _srs_pps_dispose = new SrsPps();
+    _srs_pps_timer = new SrsPps();
+    _srs_pps_clock_15ms = new SrsPps();
+    _srs_pps_clock_20ms = new SrsPps();
+    _srs_pps_clock_25ms = new SrsPps();
+    _srs_pps_clock_30ms = new SrsPps();
+    _srs_pps_clock_35ms = new SrsPps();
+    _srs_pps_clock_40ms = new SrsPps();
+    _srs_pps_clock_80ms = new SrsPps();
+    _srs_pps_clock_160ms = new SrsPps();
+    _srs_pps_timer_s = new SrsPps();
+    _srs_pps_rpkts = new SrsPps();
+    _srs_pps_addrs = new SrsPps();
+    _srs_pps_fast_addrs = new SrsPps();
+    _srs_pps_spkts = new SrsPps();
+    _srs_pps_sstuns = new SrsPps();
+    _srs_pps_srtcps = new SrsPps();
+    _srs_pps_srtps = new SrsPps();
+    _srs_pps_pli = new SrsPps();
+    _srs_pps_twcc = new SrsPps();
+    _srs_pps_rr = new SrsPps();
+    _srs_pps_pub = new SrsPps();
+    _srs_pps_conn = new SrsPps();
+    _srs_pps_rstuns = new SrsPps();
+    _srs_pps_rrtps = new SrsPps();
+    _srs_pps_rrtcps = new SrsPps();
+    _srs_pps_snack = new SrsPps();
+    _srs_pps_snack2 = new SrsPps();
+    _srs_pps_snack3 = new SrsPps();
+    _srs_pps_snack4 = new SrsPps();
+    _srs_pps_sanack = new SrsPps();
+    _srs_pps_svnack = new SrsPps();
+    _srs_pps_rnack = new SrsPps();
+    _srs_pps_rnack2 = new SrsPps();
+    _srs_pps_rhnack = new SrsPps();
+    _srs_pps_rmnack = new SrsPps();
+    _srs_thread_sync_10us = new SrsPps();
+    _srs_thread_sync_100us = new SrsPps();
+    _srs_thread_sync_1000us = new SrsPps();
+    _srs_thread_sync_plus = new SrsPps();
+    _srs_tunnel_recv_raw = new SrsPps();
+    _srs_tunnel_recv_hit = new SrsPps();
+    _srs_tunnel_send_raw = new SrsPps();
+    _srs_tunnel_send_hit = new SrsPps();
+    _srs_pps_rloss = new SrsPps();
+    _srs_pps_sloss = new SrsPps();
+    _srs_pps_aloss = new SrsPps();
+    _srs_pps_aloss2 = new SrsPps();
+    _srs_pps_objs_msgs = new SrsPps();
+    _srs_pps_objs_rtps = new SrsPps();
+    _srs_pps_objs_rraw = new SrsPps();
+    _srs_pps_objs_rfua = new SrsPps();
+    _srs_pps_objs_rbuf = new SrsPps();
+    _srs_pps_objs_rothers = new SrsPps();
+    _srs_pps_objs_drop = new SrsPps();
+    _srs_pps_cids_get = new SrsPps();
+    _srs_pps_cids_set = new SrsPps();
+    #if defined(SRS_DEBUG) && defined(SRS_DEBUG_STATS)
+    _srs_pps_recvfrom = new SrsPps();
+    _srs_pps_recvfrom_eagain = new SrsPps();
+    _srs_pps_sendto = new SrsPps();
+    _srs_pps_sendto_eagain = new SrsPps();
+    _srs_pps_read = new SrsPps();
+    _srs_pps_read_eagain = new SrsPps();
+    _srs_pps_readv = new SrsPps();
+    _srs_pps_readv_eagain = new SrsPps();
+    _srs_pps_writev = new SrsPps();
+    _srs_pps_writev_eagain = new SrsPps();
+    _srs_pps_recvmsg = new SrsPps();
+    _srs_pps_recvmsg_eagain = new SrsPps();
+    _srs_pps_sendmsg = new SrsPps();
+    _srs_pps_sendmsg_eagain = new SrsPps();
+    _srs_pps_epoll = new SrsPps();
+    _srs_pps_epoll_zero = new SrsPps();
+    _srs_pps_epoll_shake = new SrsPps();
+    _srs_pps_epoll_spin = new SrsPps();
+    _srs_pps_sched_15ms = new SrsPps();
+    _srs_pps_sched_20ms = new SrsPps();
+    _srs_pps_sched_25ms = new SrsPps();
+    _srs_pps_sched_30ms = new SrsPps();
+    _srs_pps_sched_35ms = new SrsPps();
+    _srs_pps_sched_40ms = new SrsPps();
+    _srs_pps_sched_80ms = new SrsPps();
+    _srs_pps_sched_160ms = new SrsPps();
+    _srs_pps_sched_s = new SrsPps();
+    _srs_pps_thread_run = new SrsPps();
+    _srs_pps_thread_idle = new SrsPps();
+    _srs_pps_thread_yield = new SrsPps();
+    _srs_pps_thread_yield2 = new SrsPps();
+    #endif
+
+    // MUST init ST for each thread, because ST is thread-local now.
+    if ((err = srs_st_init()) != srs_success) {
+        return srs_error_wrap(err, "init st");
+    }
 
     return err;
 }

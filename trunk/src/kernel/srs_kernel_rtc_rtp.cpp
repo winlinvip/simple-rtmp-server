@@ -36,12 +36,12 @@ using namespace std;
 
 #include <srs_kernel_kbps.hpp>
 
-SrsPps* _srs_pps_objs_rtps = new SrsPps();
-SrsPps* _srs_pps_objs_rraw = new SrsPps();
-SrsPps* _srs_pps_objs_rfua = new SrsPps();
-SrsPps* _srs_pps_objs_rbuf = new SrsPps();
-SrsPps* _srs_pps_objs_rothers = new SrsPps();
-SrsPps* _srs_pps_objs_drop = new SrsPps();
+__thread SrsPps* _srs_pps_objs_rtps = NULL;
+__thread SrsPps* _srs_pps_objs_rraw = NULL;
+__thread SrsPps* _srs_pps_objs_rfua = NULL;
+__thread SrsPps* _srs_pps_objs_rbuf = NULL;
+__thread SrsPps* _srs_pps_objs_rothers = NULL;
+__thread SrsPps* _srs_pps_objs_drop = NULL;
 
 /* @see https://tools.ietf.org/html/rfc1889#section-5.1
   0                   1                   2                   3

@@ -93,6 +93,9 @@ srs_error_t do_main(int argc, char** argv)
         return srs_error_wrap(err, "thread init");
     }
 
+    // For background context id.
+    _srs_context->set_id(_srs_context->generate_id());
+
     // TODO: support both little and big endian.
     srs_assert(srs_is_little_endian());
 
@@ -227,9 +230,6 @@ srs_error_t do_main(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
-    // For background context id.
-    _srs_context->set_id(_srs_context->generate_id());
-
     srs_error_t err = do_main(argc, argv);
 
     // Because we are exiting, and it's impossible to notify the async log thread
@@ -574,6 +574,7 @@ srs_error_t run_hybrid_server(void* arg)
         return srs_error_wrap(err, "hybrid run");
     }
 
+    // TODO: FIXME: Crash if hybrid run fail, for example, listen failed.
     // After all done, stop and cleanup.
     _srs_hybrid->stop();
 

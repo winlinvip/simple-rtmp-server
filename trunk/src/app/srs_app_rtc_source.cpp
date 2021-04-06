@@ -52,19 +52,19 @@
 #include <srs_protocol_kbps.hpp>
 
 // The NACK sent by us(SFU).
-SrsPps* _srs_pps_snack = new SrsPps();
-SrsPps* _srs_pps_snack2 = new SrsPps();
-SrsPps* _srs_pps_snack3 = new SrsPps();
-SrsPps* _srs_pps_snack4 = new SrsPps();
-SrsPps* _srs_pps_sanack = new SrsPps();
-SrsPps* _srs_pps_svnack = new SrsPps();
+__thread SrsPps* _srs_pps_snack = NULL;
+__thread SrsPps* _srs_pps_snack2 = NULL;
+__thread SrsPps* _srs_pps_snack3 = NULL;
+__thread SrsPps* _srs_pps_snack4 = NULL;
+__thread SrsPps* _srs_pps_sanack = NULL;
+__thread SrsPps* _srs_pps_svnack = NULL;
 
-SrsPps* _srs_pps_rnack = new SrsPps();
-SrsPps* _srs_pps_rnack2 = new SrsPps();
-SrsPps* _srs_pps_rhnack = new SrsPps();
-SrsPps* _srs_pps_rmnack = new SrsPps();
+__thread SrsPps* _srs_pps_rnack = NULL;
+__thread SrsPps* _srs_pps_rnack2 = NULL;
+__thread SrsPps* _srs_pps_rhnack = NULL;
+__thread SrsPps* _srs_pps_rmnack = NULL;
 
-extern SrsPps* _srs_pps_aloss2;
+extern __thread SrsPps* _srs_pps_aloss2;
 
 // Firefox defaults as 109, Chrome is 111.
 const int kAudioPayloadType     = 111;

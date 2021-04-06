@@ -37,8 +37,8 @@ using namespace std;
 
 #include <srs_protocol_kbps.hpp>
 
-extern SrsPps* _srs_pps_snack3;
-extern SrsPps* _srs_pps_snack4;
+extern __thread SrsPps* _srs_pps_snack3;
+extern __thread SrsPps* _srs_pps_snack4;
 
 SrsRtpRingBuffer::SrsRtpRingBuffer(int capacity)
 {

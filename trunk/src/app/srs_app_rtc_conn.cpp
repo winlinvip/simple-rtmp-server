@@ -61,22 +61,22 @@ using namespace std;
 
 #include <srs_protocol_kbps.hpp>
 
-SrsPps* _srs_pps_sstuns = new SrsPps();
-SrsPps* _srs_pps_srtcps = new SrsPps();
-SrsPps* _srs_pps_srtps = new SrsPps();
+__thread SrsPps* _srs_pps_sstuns = NULL;
+__thread SrsPps* _srs_pps_srtcps = NULL;
+__thread SrsPps* _srs_pps_srtps = NULL;
 
-SrsPps* _srs_pps_pli = new SrsPps();
-SrsPps* _srs_pps_twcc = new SrsPps();
-SrsPps* _srs_pps_rr = new SrsPps();
-SrsPps* _srs_pps_pub = new SrsPps();
-SrsPps* _srs_pps_conn = new SrsPps();
+__thread SrsPps* _srs_pps_pli = NULL;
+__thread SrsPps* _srs_pps_twcc = NULL;
+__thread SrsPps* _srs_pps_rr = NULL;
+__thread SrsPps* _srs_pps_pub = NULL;
+__thread SrsPps* _srs_pps_conn = NULL;
 
-extern SrsPps* _srs_pps_snack;
-extern SrsPps* _srs_pps_snack2;
+extern __thread SrsPps* _srs_pps_snack;
+extern __thread SrsPps* _srs_pps_snack2;
 
-extern SrsPps* _srs_pps_rnack;
-extern SrsPps* _srs_pps_rnack2;
-extern SrsPps* _srs_pps_snack4;
+extern __thread SrsPps* _srs_pps_rnack;
+extern __thread SrsPps* _srs_pps_rnack2;
+extern __thread SrsPps* _srs_pps_snack4;
 
 #define SRS_TICKID_RTCP 0
 #define SRS_TICKID_TWCC 1

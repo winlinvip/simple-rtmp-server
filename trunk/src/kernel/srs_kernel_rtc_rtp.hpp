@@ -357,7 +357,7 @@ public:
 
 // For object cache manager to stat the object dropped.
 #include <srs_kernel_kbps.hpp>
-extern SrsPps* _srs_pps_objs_drop;
+extern __thread SrsPps* _srs_pps_objs_drop;
 
 // The RTP packet or message cache manager.
 template<typename T>

@@ -45,42 +45,42 @@ using namespace std;
 #include <srs_app_rtc_api.hpp>
 #include <srs_protocol_utility.hpp>
 
-extern SrsPps* _srs_pps_rpkts;
-SrsPps* _srs_pps_rstuns = new SrsPps();
-SrsPps* _srs_pps_rrtps = new SrsPps();
-SrsPps* _srs_pps_rrtcps = new SrsPps();
-extern SrsPps* _srs_pps_addrs;
-extern SrsPps* _srs_pps_fast_addrs;
+extern __thread SrsPps* _srs_pps_rpkts;
+__thread SrsPps* _srs_pps_rstuns = NULL;
+__thread SrsPps* _srs_pps_rrtps = NULL;
+__thread SrsPps* _srs_pps_rrtcps = NULL;
+extern __thread SrsPps* _srs_pps_addrs;
+extern __thread SrsPps* _srs_pps_fast_addrs;
 
-extern SrsPps* _srs_pps_spkts;
-extern SrsPps* _srs_pps_sstuns;
-extern SrsPps* _srs_pps_srtcps;
-extern SrsPps* _srs_pps_srtps;
+extern __thread SrsPps* _srs_pps_spkts;
+extern __thread SrsPps* _srs_pps_sstuns;
+extern __thread SrsPps* _srs_pps_srtcps;
+extern __thread SrsPps* _srs_pps_srtps;
 
-extern SrsPps* _srs_pps_ids;
-extern SrsPps* _srs_pps_fids;
-extern SrsPps* _srs_pps_fids_level0;
+extern __thread SrsPps* _srs_pps_ids;
+extern __thread SrsPps* _srs_pps_fids;
+extern __thread SrsPps* _srs_pps_fids_level0;
 
-extern SrsPps* _srs_pps_pli;
-extern SrsPps* _srs_pps_twcc;
-extern SrsPps* _srs_pps_rr;
+extern __thread SrsPps* _srs_pps_pli;
+extern __thread SrsPps* _srs_pps_twcc;
+extern __thread SrsPps* _srs_pps_rr;
 
-extern SrsPps* _srs_pps_snack;
-extern SrsPps* _srs_pps_snack2;
-extern SrsPps* _srs_pps_snack3;
-extern SrsPps* _srs_pps_snack4;
-extern SrsPps* _srs_pps_sanack;
-extern SrsPps* _srs_pps_svnack;
+extern __thread SrsPps* _srs_pps_snack;
+extern __thread SrsPps* _srs_pps_snack2;
+extern __thread SrsPps* _srs_pps_snack3;
+extern __thread SrsPps* _srs_pps_snack4;
+extern __thread SrsPps* _srs_pps_sanack;
+extern __thread SrsPps* _srs_pps_svnack;
 
-extern SrsPps* _srs_pps_rnack;
-extern SrsPps* _srs_pps_rnack2;
-extern SrsPps* _srs_pps_rhnack;
-extern SrsPps* _srs_pps_rmnack;
+extern __thread SrsPps* _srs_pps_rnack;
+extern __thread SrsPps* _srs_pps_rnack2;
+extern __thread SrsPps* _srs_pps_rhnack;
+extern __thread SrsPps* _srs_pps_rmnack;
 
-extern SrsPps* _srs_pps_rloss;
-extern SrsPps* _srs_pps_sloss;
-extern SrsPps* _srs_pps_aloss;
-extern SrsPps* _srs_pps_aloss2;
+extern __thread SrsPps* _srs_pps_rloss;
+extern __thread SrsPps* _srs_pps_sloss;
+extern __thread SrsPps* _srs_pps_aloss;
+extern __thread SrsPps* _srs_pps_aloss2;
 
 SrsRtcBlackhole::SrsRtcBlackhole()
 {
