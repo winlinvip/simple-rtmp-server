@@ -362,7 +362,7 @@ private:
     static void* start(void* arg);
 };
 
-// The global thread pool.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsThreadPool* _srs_thread_pool;
 
 // Async file writer, it's thread safe.
@@ -426,7 +426,7 @@ private:
     srs_error_t do_start();
 };
 
-// The global async log manager.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsAsyncLogManager* _srs_async_log;
 
 // The async SRTP codec.
@@ -527,7 +527,7 @@ public:
     virtual srs_error_t consume(SrsThreadEntry* entry, int* nn_consumed);
 };
 
-// The global async SRTP manager.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsAsyncSRTPManager* _srs_async_srtp;
 
 // A thread-safe UDP listener.
@@ -608,7 +608,7 @@ private:
     bool consume_by_tunnel(SrsUdpMuxSocket* skt);
 };
 
-// The global async RECV manager.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsAsyncRecvManager* _srs_async_recv;
 
 // The async UDP packet.
@@ -651,7 +651,7 @@ private:
     srs_error_t do_start();
 };
 
-// The global async SEND manager.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsAsyncSendManager* _srs_async_send;
 
 #endif

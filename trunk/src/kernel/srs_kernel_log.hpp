@@ -97,10 +97,10 @@ public:
     virtual const SrsContextId& set_id(const SrsContextId& v) = 0;
 };
 
-// @global User must provides a log object
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern ISrsLog* _srs_log;
 
-// @global User must implements the LogContext and define a global instance.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern ISrsContext* _srs_context;
 
 // Log style.

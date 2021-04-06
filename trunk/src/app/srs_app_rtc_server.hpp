@@ -60,6 +60,7 @@ public:
     void sendto(void* data, int len);
 };
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsRtcBlackhole* _srs_blackhole;
 
 // The handler for RTC server to call.
@@ -144,7 +145,7 @@ public:
     virtual void stop();
 };
 
-// Manager for RTC connections.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsResourceManager* _srs_rtc_manager;
 
 #endif

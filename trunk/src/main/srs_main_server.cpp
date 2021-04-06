@@ -81,6 +81,7 @@ SrsConfig* _srs_config = new SrsConfig();
 // @global version of srs, which can grep keyword "XCORE"
 extern const char* _srs_version;
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 // @global main SRS server, for debugging
 SrsServer* _srs_server = NULL;
 

@@ -582,11 +582,13 @@ public:
     virtual ISrsRtpPayloader* copy();
 };
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 // For RTP packets cache.
 extern SrsRtpObjectCacheManager<SrsRtpPacket2>* _srs_rtp_cache;
 extern SrsRtpObjectCacheManager<SrsRtpRawPayload>* _srs_rtp_raw_cache;
 extern SrsRtpObjectCacheManager<SrsRtpFUAPayload2>* _srs_rtp_fua_cache;
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 // For shared message cache, with payload.
 extern SrsRtpObjectCacheManager<SrsSharedPtrMessage>* _srs_rtp_msg_cache_buffers;
 // For shared message cache, without payload.

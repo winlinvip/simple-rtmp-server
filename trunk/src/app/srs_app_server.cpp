@@ -812,7 +812,8 @@ srs_error_t SrsServer::initialize(ISrsServerCycle* ch)
     // instead, subscribe handler in initialize method.
     srs_assert(_srs_config);
     _srs_config->subscribe(this);
-    
+
+    // TODO: FIXME: It should be thread-local or thread-safe.
     handler = ch;
     if(handler && (err = handler->initialize()) != srs_success){
         return srs_error_wrap(err, "handler initialize");
@@ -946,7 +947,6 @@ srs_error_t SrsServer::ingest()
 {
     srs_error_t err = srs_success;
 
-    // TODO: FIXME: Should move from hybrid to api threads.
     if ((err = ingester->start()) != srs_success) {
         return srs_error_wrap(err, "ingest start");
     }
@@ -1675,14 +1675,17 @@ srs_error_t SrsServerAdapter::run()
         return srs_error_wrap(err, "server initialize");
     }
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     if ((err = srs->initialize_st()) != srs_success) {
         return srs_error_wrap(err, "initialize st");
     }
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     if ((err = srs->acquire_pid_file()) != srs_success) {
         return srs_error_wrap(err, "acquire pid file");
     }
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     if ((err = srs->initialize_signal()) != srs_success) {
         return srs_error_wrap(err, "initialize signal");
     }
@@ -1691,10 +1694,12 @@ srs_error_t SrsServerAdapter::run()
         return srs_error_wrap(err, "listen");
     }
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     if ((err = srs->register_signal()) != srs_success) {
         return srs_error_wrap(err, "register signal");
     }
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     if ((err = srs->ingest()) != srs_success) {
         return srs_error_wrap(err, "ingest");
     }

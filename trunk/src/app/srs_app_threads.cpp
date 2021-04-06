@@ -30,6 +30,7 @@
 #include <srs_kernel_utility.hpp>
 #include <srs_app_utility.hpp>
 #include <srs_app_hybrid.hpp>
+#include <srs_app_source.hpp>
 
 #include <unistd.h>
 
@@ -509,6 +510,9 @@ srs_error_t SrsThreadPool::setup()
     // Create the hybrid RTMP/HTTP/RTC server.
     _srs_hybrid = new SrsHybridServer();
 
+    // Create the source manager for server.
+    _srs_sources = new SrsSourceManager();
+
     return err;
 }
 
@@ -516,8 +520,12 @@ srs_error_t SrsThreadPool::initialize()
 {
     srs_error_t err = srs_success;
 
-    // Initialize global shared SRTP once.
+    // Initialize global shared thread-safe objects once.
     srs_assert(srtp_init() == 0);
+
+    if ((err = _srs_rtc_dtls_certificate->initialize()) != srs_success) {
+        return srs_error_wrap(err, "rtc dtls certificate initialize");
+    }
 
     // Initialize the master primordial thread.
     SrsThreadEntry* entry = (SrsThreadEntry*)entry_;

@@ -581,6 +581,7 @@ public:
     virtual srs_error_t on_start_consume(SrsRtcConnection* session, SrsRtcPlayStream* player, SrsRequest* req, SrsRtcConsumer* consumer) = 0;
 };
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern ISrsRtcHijacker* _srs_rtc_hijacker;
 
 #endif

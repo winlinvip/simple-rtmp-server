@@ -92,7 +92,7 @@ public:
     virtual srs_utime_t now();
 };
 
-// The global clock.
+// TODO: FIXME: It should be thread-local or thread-safe.
 extern SrsWallClock* _srs_clock;
 
 #endif
