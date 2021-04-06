@@ -1650,6 +1650,7 @@ SrsApiServer::SrsApiServer()
     http_ = new SrsBufferListener(this, SrsListenerHttpApi);
     https_ = new SrsBufferListener(this, SrsListenerHttpApi);
     conn_manager_ = new SrsResourceManager("api");
+    lock_ = srs_mutex_new();
 }
 
 SrsApiServer::~SrsApiServer()
@@ -1658,6 +1659,7 @@ SrsApiServer::~SrsApiServer()
     srs_freep(http_);
     srs_freep(https_);
     srs_freep(conn_manager_);
+    srs_mutex_destroy(lock_);
 }
 
 srs_error_t SrsApiServer::initialize()
@@ -1973,15 +1975,21 @@ srs_error_t SrsApiServer::create_session(
     m.id = (uint64_t)SrsThreadMessageIDRtcCreateSession;
     m.ptr = (uint64_t)&s;
 
-    // We're initiator, write to initiator, read from responder.
-    // TODO: FIXME: Write important logs, and error response, and timeout?
-    if ((err = channel->initiator()->write(&m, sizeof(m), NULL)) != srs_success) {
-        return srs_error_wrap(err, "write");
-    }
+    if (true) {
+        // Process api request one by one.
+        // TODO: FIXME: The lock too big? Write log and error?
+        SrsLocker(lock_);
 
-    // TODO: FIXME: Write important logs, and error response, and timeout?
-    if ((err = channel->responder()->read(&m, sizeof(m), NULL)) != srs_success) {
-        return srs_error_wrap(err, "read");
+        // We're initiator, write to initiator, read from responder.
+        // TODO: FIXME: Write important logs, and error response, and timeout?
+        if ((err = channel->initiator()->write(&m, sizeof(m), NULL)) != srs_success) {
+            return srs_error_wrap(err, "write");
+        }
+
+        // TODO: FIXME: Write important logs, and error response, and timeout?
+        if ((err = channel->responder()->read(&m, sizeof(m), NULL)) != srs_success) {
+            return srs_error_wrap(err, "read");
+        }
     }
 
     // Covert to output params.

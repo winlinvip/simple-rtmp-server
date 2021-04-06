@@ -421,6 +421,9 @@ private:
 private:
     // Key is stream url, value is hybrid thread entry.
     std::map<std::string, SrsThreadEntry*> hybrids_;
+private:
+    // To process api request one by one.
+    srs_mutex_t lock_;
 public:
     SrsApiServer();
     virtual ~SrsApiServer();
