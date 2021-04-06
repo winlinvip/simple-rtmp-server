@@ -29,6 +29,7 @@
 #include <srs_core_autofree.hpp>
 #include <srs_kernel_utility.hpp>
 #include <srs_app_utility.hpp>
+#include <srs_app_hybrid.hpp>
 
 #include <unistd.h>
 
@@ -505,6 +506,9 @@ srs_error_t SrsThreadPool::setup()
         return srs_error_wrap(err, "init st");
     }
 
+    // Create the hybrid RTMP/HTTP/RTC server.
+    _srs_hybrid = new SrsHybridServer();
+
     return err;
 }
 
@@ -512,6 +516,10 @@ srs_error_t SrsThreadPool::initialize()
 {
     srs_error_t err = srs_success;
 
+    // Initialize global shared SRTP once.
+    srs_assert(srtp_init() == 0);
+
+    // Initialize the master primordial thread.
     SrsThreadEntry* entry = (SrsThreadEntry*)entry_;
 #ifndef SRS_OSX
     // Load CPU affinity from config.

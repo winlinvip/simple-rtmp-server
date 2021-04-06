@@ -246,9 +246,6 @@ srs_error_t SrsDtlsCertificate::initialize()
     // OPENSSL_init_ssl();
 #endif
 
-    // Initialize SRTP first.
-    srs_assert(srtp_init() == 0);
-
     // Whether use ECDSA certificate.
     ecdsa_mode = _srs_config->get_rtc_server_ecdsa();
 

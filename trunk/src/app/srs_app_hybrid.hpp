@@ -56,11 +56,17 @@ private:
     std::vector<ISrsHybridServer*> servers;
     SrsFastTimer* timer_;
     SrsClockWallMonitor* clock_monitor_;
+private:
+    // The config index for hybrid/stream server.
+    int stream_index_;
 public:
     SrsHybridServer();
     virtual ~SrsHybridServer();
 public:
     virtual void register_server(ISrsHybridServer* svr);
+public:
+    int stream_index() { return stream_index_; } // SrsHybridServer::stream_index()
+    void set_stream_index(int v) { stream_index_ = v; } // SrsHybridServer::set_stream_index()
 public:
     virtual srs_error_t initialize();
     virtual srs_error_t run();
@@ -74,6 +80,6 @@ private:
     srs_error_t on_thread_message(SrsThreadMessage* msg, SrsThreadPipeChannel* channel);
 };
 
-extern SrsHybridServer* _srs_hybrid;
+extern __thread SrsHybridServer* _srs_hybrid;
 
 #endif

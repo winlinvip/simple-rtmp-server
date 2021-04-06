@@ -945,7 +945,8 @@ srs_error_t SrsServer::register_signal()
 srs_error_t SrsServer::ingest()
 {
     srs_error_t err = srs_success;
-    
+
+    // TODO: FIXME: Should move from hybrid to api threads.
     if ((err = ingester->start()) != srs_success) {
         return srs_error_wrap(err, "ingest start");
     }
