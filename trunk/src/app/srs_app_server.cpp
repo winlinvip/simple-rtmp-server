@@ -687,7 +687,6 @@ SrsServer::SrsServer()
     signal_gmc_stop = false;
     signal_fast_quit = false;
     signal_gracefully_quit = false;
-    pid_fd = -1;
     
     signal_manager = new SrsSignalManager(this);
     conn_manager = new SrsResourceManager("TCP", true);
@@ -722,11 +721,6 @@ void SrsServer::destroy()
     srs_freep(http_server);
     srs_freep(http_heartbeat);
     srs_freep(ingester);
-    
-    if (pid_fd > 0) {
-        ::close(pid_fd);
-        pid_fd = -1;
-    }
     
     srs_freep(signal_manager);
     srs_freep(conn_manager);
@@ -845,64 +839,6 @@ srs_error_t SrsServer::initialize_st()
 srs_error_t SrsServer::initialize_signal()
 {
     return signal_manager->initialize();
-}
-
-srs_error_t SrsServer::acquire_pid_file()
-{
-    std::string pid_file = _srs_config->get_pid_file();
-    
-    // -rw-r--r--
-    // 644
-    int mode = S_IRUSR | S_IWUSR |  S_IRGRP | S_IROTH;
-    
-    int fd;
-    // open pid file
-    if ((fd = ::open(pid_file.c_str(), O_WRONLY | O_CREAT, mode)) == -1) {
-        return srs_error_new(ERROR_SYSTEM_PID_ACQUIRE, "open pid file=%s", pid_file.c_str());
-    }
-    
-    // require write lock
-    struct flock lock;
-    
-    lock.l_type = F_WRLCK; // F_RDLCK, F_WRLCK, F_UNLCK
-    lock.l_start = 0; // type offset, relative to l_whence
-    lock.l_whence = SEEK_SET;  // SEEK_SET, SEEK_CUR, SEEK_END
-    lock.l_len = 0;
-    
-    if (fcntl(fd, F_SETLK, &lock) == -1) {
-        if(errno == EACCES || errno == EAGAIN) {
-            ::close(fd);
-            srs_error("srs is already running!");
-            return srs_error_new(ERROR_SYSTEM_PID_ALREADY_RUNNING, "srs is already running");
-        }
-        return srs_error_new(ERROR_SYSTEM_PID_LOCK, "access to pid=%s", pid_file.c_str());
-    }
-    
-    // truncate file
-    if (ftruncate(fd, 0) != 0) {
-        return srs_error_new(ERROR_SYSTEM_PID_TRUNCATE_FILE, "truncate pid file=%s", pid_file.c_str());
-    }
-    
-    // write the pid
-    string pid = srs_int2str(getpid());
-    if (write(fd, pid.c_str(), pid.length()) != (int)pid.length()) {
-        return srs_error_new(ERROR_SYSTEM_PID_WRITE_FILE, "write pid=%s to file=%s", pid.c_str(), pid_file.c_str());
-    }
-    
-    // auto close when fork child process.
-    int val;
-    if ((val = fcntl(fd, F_GETFD, 0)) < 0) {
-        return srs_error_new(ERROR_SYSTEM_PID_GET_FILE_INFO, "fcntl fd=%d", fd);
-    }
-    val |= FD_CLOEXEC;
-    if (fcntl(fd, F_SETFD, val) < 0) {
-        return srs_error_new(ERROR_SYSTEM_PID_SET_FILE_INFO, "lock file=%s fd=%d", pid_file.c_str(), fd);
-    }
-    
-    srs_trace("write pid=%s to %s success!", pid.c_str(), pid_file.c_str());
-    pid_fd = fd;
-    
-    return srs_success;
 }
 
 srs_error_t SrsServer::listen()
@@ -1534,16 +1470,7 @@ srs_error_t SrsServer::on_reload_listen()
 srs_error_t SrsServer::on_reload_pid()
 {
     srs_error_t err = srs_success;
-    
-    if (pid_fd > 0) {
-        ::close(pid_fd);
-        pid_fd = -1;
-    }
-    
-    if ((err = acquire_pid_file()) != srs_success) {
-        return srs_error_wrap(err, "reload pid");
-    }
-    
+    // TODO: FIXME: Do not support reload pid.
     return err;
 }
 
@@ -1680,11 +1607,6 @@ srs_error_t SrsServerAdapter::run()
     // TODO: FIXME: It should be thread-local or thread-safe.
     if ((err = srs->initialize_st()) != srs_success) {
         return srs_error_wrap(err, "initialize st");
-    }
-
-    // TODO: FIXME: It should be thread-local or thread-safe.
-    if ((err = srs->acquire_pid_file()) != srs_success) {
-        return srs_error_wrap(err, "acquire pid file");
     }
 
     // TODO: FIXME: It should be thread-local or thread-safe.

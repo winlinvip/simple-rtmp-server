@@ -287,11 +287,6 @@ private:
     SrsCoroutine* trd_;
     SrsHourGlass* timer_;
 private:
-    // The pid file fd, lock the file write when server is running.
-    // @remark the init.d script should cleanup the pid file, when stop service,
-    //       for the server never delete the file; when system startup, the pid in pid file
-    //       maybe valid but the process is not SRS, the init.d script will never start server.
-    int pid_fd;
     // All listners, listener manager.
     std::vector<SrsListener*> listeners;
     // Signal manager which convert gignal to io message.
@@ -327,7 +322,6 @@ public:
     virtual srs_error_t initialize(ISrsServerCycle* ch);
     virtual srs_error_t initialize_st();
     virtual srs_error_t initialize_signal();
-    virtual srs_error_t acquire_pid_file();
     virtual srs_error_t listen();
     virtual srs_error_t register_signal();
     virtual srs_error_t ingest();

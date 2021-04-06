@@ -338,6 +338,12 @@ private:
     int critical_pulse_;
     int dying_threshold_;
     int dying_pulse_;
+private:
+    // The pid file fd, lock the file write when server is running.
+    // @remark the init.d script should cleanup the pid file, when stop service,
+    //       for the server never delete the file; when system startup, the pid in pid file
+    //       maybe valid but the process is not SRS, the init.d script will never start server.
+    int pid_fd;
 public:
     SrsThreadPool();
     virtual ~SrsThreadPool();
@@ -350,6 +356,10 @@ public:
     static srs_error_t setup();
     // Initialize the thread pool.
     srs_error_t initialize();
+private:
+    // Require the PID file for the whole process.
+    virtual srs_error_t acquire_pid_file();
+public:
     // Execute start function with label in thread.
     srs_error_t execute(std::string label, srs_error_t (*start)(void* arg), void* arg);
     // Run in the primordial thread, util stop or quit.
