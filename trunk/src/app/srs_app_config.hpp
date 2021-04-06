@@ -46,6 +46,7 @@ class SrsConfig;
 class SrsRequest;
 class SrsJsonArray;
 class SrsConfDirective;
+class SrsThreadMutex;
 
 /**
  * whether the two vector actual equals, for instance,
@@ -140,6 +141,7 @@ extern srs_error_t srs_config_transform_vhost(SrsConfDirective* root);
 extern srs_error_t srs_config_transform_vhost2(SrsConfDirective* root);
 
 // TODO: FIXME: It should be thread-local or thread-safe.
+// TODO: FIXME: We should use channel to deliver changes of config.
 extern SrsConfig* _srs_config;
 
 // The config directive.
@@ -299,6 +301,7 @@ protected:
 private:
     // The reload subscribers, when reload, callback all handlers.
     std::vector<ISrsReloadHandler*> subscribes;
+    SrsThreadMutex* lock_;
 public:
     SrsConfig();
     virtual ~SrsConfig();

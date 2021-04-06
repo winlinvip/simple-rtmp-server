@@ -60,8 +60,8 @@ public:
     void sendto(void* data, int len);
 };
 
-// TODO: FIXME: It should be thread-local or thread-safe.
-extern SrsRtcBlackhole* _srs_blackhole;
+// It MUST be thread-local, because it create ST socket.
+extern __thread SrsRtcBlackhole* _srs_blackhole;
 
 // The handler for RTC server to call.
 class ISrsRtcServerHandler
@@ -145,8 +145,8 @@ public:
     virtual void stop();
 };
 
-// TODO: FIXME: It should be thread-local or thread-safe.
-extern SrsResourceManager* _srs_rtc_manager;
+// It SHOULD be thread-local, because used to find connection for each UDP packet.
+extern __thread SrsResourceManager* _srs_rtc_manager;
 
 #endif
 

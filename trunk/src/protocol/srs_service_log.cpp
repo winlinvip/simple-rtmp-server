@@ -54,6 +54,7 @@ SrsContextId SrsThreadContext::generate_id()
     return cid.set_value(srs_random_str(8));
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsContextId _srs_context_default;
 static int _srs_context_key = -1;
 void _srs_context_destructor(void* arg)

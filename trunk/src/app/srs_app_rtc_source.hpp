@@ -138,8 +138,8 @@ private:
     virtual SrsRtcStream* fetch(SrsRequest* r);
 };
 
-// TODO: FIXME: It should be thread-local or thread-safe.
-extern SrsRtcStreamManager* _srs_rtc_sources;
+// It SHOULD be thread-local, because stream source is isolated by threads.
+extern __thread SrsRtcStreamManager* _srs_rtc_sources;
 
 // A publish stream interface, for source to callback with.
 class ISrsRtcPublishStream

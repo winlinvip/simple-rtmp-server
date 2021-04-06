@@ -56,6 +56,7 @@ using namespace std;
 #include <srs_app_http_hooks.hpp>
 #include <srs_kernel_utility.hpp>
 #include <srs_rtmp_stack.hpp>
+#include <srs_app_threads.hpp>
 
 using namespace srs_internal;
 
@@ -1189,15 +1190,20 @@ SrsConfig::SrsConfig()
     root = new SrsConfDirective();
     root->conf_line = 0;
     root->name = "root";
+
+    lock_ = new SrsThreadMutex();
 }
 
 SrsConfig::~SrsConfig()
 {
+    srs_freep(lock_);
     srs_freep(root);
 }
 
 void SrsConfig::subscribe(ISrsReloadHandler* handler)
 {
+    SrsThreadLocker(lock_);
+
     std::vector<ISrsReloadHandler*>::iterator it;
     
     it = std::find(subscribes.begin(), subscribes.end(), handler);
@@ -1210,6 +1216,8 @@ void SrsConfig::subscribe(ISrsReloadHandler* handler)
 
 void SrsConfig::unsubscribe(ISrsReloadHandler* handler)
 {
+    SrsThreadLocker(lock_);
+
     std::vector<ISrsReloadHandler*>::iterator it;
     
     it = std::find(subscribes.begin(), subscribes.end(), handler);

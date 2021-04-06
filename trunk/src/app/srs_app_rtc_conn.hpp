@@ -582,6 +582,7 @@ public:
 };
 
 // TODO: FIXME: It should be thread-local or thread-safe.
+// TODO: FIXME: It seems thread-local make sense.
 extern ISrsRtcHijacker* _srs_rtc_hijacker;
 
 #endif

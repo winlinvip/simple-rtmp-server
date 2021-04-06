@@ -977,12 +977,14 @@ srs_error_t SrsServer::cycle()
 {
     srs_error_t err = srs_success;
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     // Start the inotify auto reload by watching config file.
     SrsInotifyWorker inotify(this);
     if ((err = inotify.start()) != srs_success) {
         return srs_error_wrap(err, "start inotify");
     }
 
+    // TODO: FIXME: It should be thread-local or thread-safe.
     // Do server main cycle.
      err = do_cycle();
     

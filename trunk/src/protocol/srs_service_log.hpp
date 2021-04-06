@@ -36,8 +36,6 @@
 // which identify the client.
 class SrsThreadContext : public ISrsContext
 {
-private:
-    std::map<srs_thread_t, SrsContextId> cache;
 public:
     SrsThreadContext();
     virtual ~SrsThreadContext();

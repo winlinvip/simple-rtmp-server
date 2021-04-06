@@ -221,6 +221,7 @@ srs_error_t srs_kill_forced(int& pid)
     return err;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsRusage _srs_system_rusage;
 
 SrsRusage::SrsRusage()
@@ -247,6 +248,7 @@ void srs_update_system_rusage()
     _srs_system_rusage.ok = true;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsProcSelfStat _srs_system_cpu_self_stat;
 static SrsProcSystemStat _srs_system_cpu_system_stat;
 
@@ -523,6 +525,7 @@ SrsDiskStat::SrsDiskStat()
     wr_ticks = nb_current = ticks = aveq = 0;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsDiskStat _srs_disk_stat;
 
 SrsDiskStat* srs_get_disk_stat()
@@ -717,6 +720,7 @@ SrsMemInfo::SrsMemInfo()
     SwapFree = 0;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsMemInfo _srs_system_meminfo;
 
 SrsMemInfo* srs_get_meminfo()
@@ -809,6 +813,7 @@ SrsPlatformInfo::SrsPlatformInfo()
     load_fifteen_minutes = 0;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsPlatformInfo _srs_system_platform_info;
 
 SrsPlatformInfo* srs_get_platform_info()
@@ -909,6 +914,7 @@ SrsSnmpUdpStat::~SrsSnmpUdpStat()
 {
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsSnmpUdpStat _srs_snmp_udp_stat;
 
 void srs_update_udp_snmp_statistic()
@@ -987,6 +993,7 @@ SrsNetworkDevices::SrsNetworkDevices()
     scompressed = 0;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 #define MAX_NETWORK_DEVICES_COUNT 16
 static SrsNetworkDevices _srs_system_network_devices[MAX_NETWORK_DEVICES_COUNT];
 static int _nb_srs_system_network_devices = -1;
@@ -1055,6 +1062,7 @@ SrsNetworkRtmpServer::SrsNetworkRtmpServer()
     rkbps_5m = skbps_5m = 0;
 }
 
+// TODO: FIXME: It should be thread-local or thread-safe.
 static SrsNetworkRtmpServer _srs_network_rtmp_server;
 
 SrsNetworkRtmpServer* srs_get_network_rtmp_server()

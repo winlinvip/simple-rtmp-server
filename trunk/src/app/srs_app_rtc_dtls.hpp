@@ -63,7 +63,7 @@ public:
     bool is_ecdsa();
 };
 
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It's shared global object, MUST be thread-safe.
 extern SrsDtlsCertificate* _srs_rtc_dtls_certificate;
 
 // @remark: play the role of DTLS_CLIENT, will send handshake

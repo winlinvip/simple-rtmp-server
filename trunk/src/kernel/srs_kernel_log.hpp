@@ -97,10 +97,10 @@ public:
     virtual const SrsContextId& set_id(const SrsContextId& v) = 0;
 };
 
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It SHOULD be thread-safe, because it use async log and thread-local buffer.
 extern ISrsLog* _srs_log;
 
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It SHOULD be thread-safe, because it use thread-local thread private data.
 extern ISrsContext* _srs_context;
 
 // Log style.

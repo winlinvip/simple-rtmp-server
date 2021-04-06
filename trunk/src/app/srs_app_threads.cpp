@@ -31,6 +31,11 @@
 #include <srs_app_utility.hpp>
 #include <srs_app_hybrid.hpp>
 #include <srs_app_source.hpp>
+#include <srs_app_rtc_server.hpp>
+#include <srs_app_conn.hpp>
+#include <srs_app_rtc_source.hpp>
+#include <srs_kernel_rtc_rtp.hpp>
+#include <srs_app_pithy_print.hpp>
 
 #include <unistd.h>
 
@@ -492,6 +497,7 @@ bool SrsThreadPool::hybrid_dying_water_level()
 // Thread local objects.
 extern const int LOG_MAX_SIZE;
 extern __thread char* _srs_log_data;
+extern __thread SrsStageManager* _srs_stages;
 
 // Setup the thread-local variables, MUST call when each thread starting.
 srs_error_t SrsThreadPool::setup()
@@ -513,6 +519,25 @@ srs_error_t SrsThreadPool::setup()
     // Create the source manager for server.
     _srs_sources = new SrsSourceManager();
 
+    // The blackhole for RTC server.
+    _srs_blackhole = new SrsRtcBlackhole();
+
+    // The resource manager for RTC server.
+    _srs_rtc_manager = new SrsResourceManager("RTC", true);
+
+    // The source manager for RTC streams.
+    _srs_rtc_sources = new SrsRtcStreamManager();
+
+    // The object cache for RTC server.
+    _srs_rtp_cache = new SrsRtpObjectCacheManager<SrsRtpPacket2>(sizeof(SrsRtpPacket2));
+    _srs_rtp_raw_cache = new SrsRtpObjectCacheManager<SrsRtpRawPayload>(sizeof(SrsRtpRawPayload));
+    _srs_rtp_fua_cache = new SrsRtpObjectCacheManager<SrsRtpFUAPayload2>(sizeof(SrsRtpFUAPayload2));
+    _srs_rtp_msg_cache_buffers = new SrsRtpObjectCacheManager<SrsSharedPtrMessage>(sizeof(SrsSharedPtrMessage) + kRtpPacketSize);
+    _srs_rtp_msg_cache_objs = new SrsRtpObjectCacheManager<SrsSharedPtrMessage>(sizeof(SrsSharedPtrMessage));
+
+    // The pithy print for each thread.
+    _srs_stages = new SrsStageManager();
+
     return err;
 }
 
@@ -521,8 +546,6 @@ srs_error_t SrsThreadPool::initialize()
     srs_error_t err = srs_success;
 
     // Initialize global shared thread-safe objects once.
-    srs_assert(srtp_init() == 0);
-
     if ((err = _srs_rtc_dtls_certificate->initialize()) != srs_success) {
         return srs_error_wrap(err, "rtc dtls certificate initialize");
     }
@@ -581,7 +604,7 @@ srs_error_t SrsThreadPool::execute(string label, srs_error_t (*start)(void* arg)
     SrsThreadEntry* entry = new SrsThreadEntry();
 
     // Update the hybrid thread entry for circuit breaker.
-    if (label == "hybrid") {
+    if (label == "hybrid" && !hybrid_) {
         hybrid_ = entry;
     }
 
@@ -664,6 +687,7 @@ srs_error_t SrsThreadPool::run()
             }
 
             // Update the Circuit-Breaker by water-level.
+            // TODO: FIXME: Should stat all hybrid servers.
             if (hybrid_ && hybrid_->stat) {
                 // Reset the high water-level when CPU is low for N times.
                 if (hybrid_->stat->percent * 100 > high_threshold_) {
@@ -823,7 +847,7 @@ void* SrsThreadPool::start(void* arg)
     return NULL;
 }
 
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It MUST be thread-safe, global and shared object.
 SrsThreadPool* _srs_thread_pool = new SrsThreadPool();
 
 SrsAsyncFileWriter::SrsAsyncFileWriter(std::string p)
@@ -1072,7 +1096,7 @@ srs_error_t SrsAsyncLogManager::do_start()
     return err;
 }
 
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It MUST be thread-safe, global shared object.
 SrsAsyncLogManager* _srs_async_log = new SrsAsyncLogManager();
 
 SrsAsyncSRTP::SrsAsyncSRTP(SrsSecurityTransport* transport)

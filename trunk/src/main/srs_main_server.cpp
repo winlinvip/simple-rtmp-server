@@ -70,9 +70,9 @@ srs_error_t run_in_thread_pool();
 void show_macro_features();
 
 // @global log and context.
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It SHOULD be thread-safe, because it use async log and thread-local buffer.
 ISrsLog* _srs_log = new SrsFileLog();
-// TODO: FIXME: It should be thread-local or thread-safe.
+// It SHOULD be thread-safe, because it use thread-local thread private data.
 ISrsContext* _srs_context = new SrsThreadContext();
 // @global config object for app module.
 // TODO: FIXME: It should be thread-local or thread-safe.
@@ -80,10 +80,6 @@ SrsConfig* _srs_config = new SrsConfig();
 
 // @global version of srs, which can grep keyword "XCORE"
 extern const char* _srs_version;
-
-// TODO: FIXME: It should be thread-local or thread-safe.
-// @global main SRS server, for debugging
-SrsServer* _srs_server = NULL;
 
 /**
  * main entrance.
