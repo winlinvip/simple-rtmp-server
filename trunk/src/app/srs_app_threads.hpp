@@ -324,6 +324,7 @@ private:
 private:
     // The hybrid server entry, the cpu percent used for circuit breaker.
     SrsThreadEntry* hybrid_;
+    std::vector<SrsThreadEntry*> hybrids_;
     // Reset the water-level when CPU is low for N times.
     // @note To avoid the CPU change rapidly.
     int hybrid_high_water_level_;
@@ -358,6 +359,7 @@ public:
 public:
     SrsThreadEntry* self();
     SrsThreadEntry* hybrid();
+    std::vector<SrsThreadEntry*> hybrids();
 private:
     static void* start(void* arg);
 };

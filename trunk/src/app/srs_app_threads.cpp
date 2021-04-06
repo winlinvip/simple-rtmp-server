@@ -279,12 +279,16 @@ srs_error_t SrsThreadPipeChannel::cycle()
         // Here we're responder, read from initiator.
         SrsThreadMessage m;
         if ((err = initiator_->read(&m, sizeof(m), NULL)) != srs_success) {
-            return srs_error_wrap(err, "read");
+            srs_warn("read err %s", srs_error_desc(err).c_str());
+            srs_freep(err); // Ignore any error.
+            continue;
         }
 
         // Consume the message, the responder can write response to responder.
         if (handler_ && (err = handler_->on_thread_message(&m, this)) != srs_success) {
-            return srs_error_wrap(err, "consume");
+            srs_warn("consume err %s", srs_error_desc(err).c_str());
+            srs_freep(err); // Ignore any error.
+            continue;
         }
     }
 
@@ -604,8 +608,9 @@ srs_error_t SrsThreadPool::execute(string label, srs_error_t (*start)(void* arg)
     SrsThreadEntry* entry = new SrsThreadEntry();
 
     // Update the hybrid thread entry for circuit breaker.
-    if (label == "hybrid" && !hybrid_) {
+    if (label == "hybrid") {
         hybrid_ = entry;
+        hybrids_.push_back(entry);
     }
 
     // To protect the threads_ for executing thread-safe.
@@ -806,6 +811,11 @@ SrsThreadEntry* SrsThreadPool::self()
 SrsThreadEntry* SrsThreadPool::hybrid()
 {
     return hybrid_;
+}
+
+vector<SrsThreadEntry*> SrsThreadPool::hybrids()
+{
+    return hybrids_;
 }
 
 void* SrsThreadPool::start(void* arg)

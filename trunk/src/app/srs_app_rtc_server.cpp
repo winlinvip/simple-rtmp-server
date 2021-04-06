@@ -365,7 +365,7 @@ srs_error_t SrsRtcServer::listen_udp()
         return err;
     }
 
-    int port = _srs_config->get_rtc_server_listen();
+    int port = _srs_config->get_rtc_server_listen(_srs_hybrid->stream_index());
     if (port <= 0) {
         return srs_error_new(ERROR_RTC_PORT, "invalid port=%d", port);
     }
@@ -571,7 +571,7 @@ srs_error_t SrsRtcServer::do_create_session(
     // We allows to mock the eip of server.
     if (!mock_eip.empty()) {
         string host;
-        int port = _srs_config->get_rtc_server_listen();
+        int port = _srs_config->get_rtc_server_listen(_srs_hybrid->stream_index());
         srs_parse_hostport(mock_eip, host, port);
 
         local_sdp.add_candidate(host, port, "host");
@@ -579,7 +579,7 @@ srs_error_t SrsRtcServer::do_create_session(
     } else {
         std::vector<string> candidate_ips = get_candidate_ips();
         for (int i = 0; i < (int)candidate_ips.size(); ++i) {
-            local_sdp.add_candidate(candidate_ips[i], _srs_config->get_rtc_server_listen(), "host");
+            local_sdp.add_candidate(candidate_ips[i], _srs_config->get_rtc_server_listen(_srs_hybrid->stream_index()), "host");
         }
         srs_trace("RTC: Use candidates %s", srs_join_vector_string(candidate_ips, ", ").c_str());
     }

@@ -437,9 +437,9 @@ srs_error_t SrsHybridServer::on_thread_message(SrsThreadMessage* msg, SrsThreadP
         // TODO: FIXME: Response timeout if error?
         // TODO: FIXME: Response a different message? With trace ID?
         // We're responder, write response to responder.
-        srs_error_t r0 = channel->responder()->write(msg, sizeof(SrsThreadMessage), NULL);
-        if (r0 != srs_success) {
-            srs_freep(r0); // Ignore any error.
+        err = channel->responder()->write(msg, sizeof(SrsThreadMessage), NULL);
+        if (err != srs_success) {
+            return srs_error_wrap(err, "response");
         }
     }
 

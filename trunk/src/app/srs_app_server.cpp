@@ -1975,14 +1975,13 @@ srs_error_t SrsApiServer::listen_api()
 {
     srs_error_t err = srs_success;
 
-    // TODO: FIXME: Implements it.
     if ((err = http_api_mux_->handle("/rtc/v1/play/", new SrsGoApiRtcPlay(this))) != srs_success) {
         return srs_error_wrap(err, "handle play");
     }
 
-    //if ((err = http_api_mux_->handle("/rtc/v1/publish/", new SrsGoApiRtcPublish(this))) != srs_success) {
-    //    return srs_error_wrap(err, "handle publish");
-    //}
+    if ((err = http_api_mux_->handle("/rtc/v1/publish/", new SrsGoApiRtcPublish(this))) != srs_success) {
+        return srs_error_wrap(err, "handle publish");
+    }
 
 #ifdef SRS_SIMULATOR
     // TODO: FIXME: Implements it.
@@ -2001,9 +2000,22 @@ srs_error_t SrsApiServer::create_session(
 ) {
     srs_error_t err = srs_success;
 
+    // Serve all connections of a stream, which identified by url, by the same hybrid thread.
+    string url = req->get_stream_url();
+    SrsThreadEntry* hybrid = NULL;
+    if (true) {
+        map<string, SrsThreadEntry*>::iterator it = hybrids_.find(url);
+        if (it == hybrids_.end()) {
+            static int index = 0;
+            vector<SrsThreadEntry*> hybrids = _srs_thread_pool->hybrids();
+            hybrids_[url] = hybrid = hybrids[(index++) % (int)hybrids.size()];
+        } else {
+            hybrid = it->second;
+        }
+    }
+
     // Allocate slot to communicate with hybrid thread.
     SrsThreadEntry* self = _srs_thread_pool->self();
-    SrsThreadEntry* hybrid = _srs_thread_pool->hybrid();
     srs_assert(self && hybrid);
 
     SrsThreadPipeChannel* channel = NULL;
@@ -2054,6 +2066,11 @@ srs_error_t SrsApiServer::create_session(
     local_sdp = s.local_sdp;
     // TODO: FIMXE: Should never return it, for it's not thread-safe.
     *psession = s.session;
+
+    // TODO: FIXME: Shoule return detail error by channel.
+    if (!s.session) {
+        return srs_error_new(ERROR_PIPE_READ, "no session");
+    }
 
     return err;
 }

@@ -412,7 +412,7 @@ srs_error_t SrsGoApiRtcPlay::exchange_sdp(SrsRequest* req, const SrsSdp& remote_
 
 uint32_t SrsGoApiRtcPublish::ssrc_num = 0;
 
-SrsGoApiRtcPublish::SrsGoApiRtcPublish(SrsRtcServer* server)
+SrsGoApiRtcPublish::SrsGoApiRtcPublish(ISrsRtcServer* server)
 {
     server_ = server;
 }

@@ -28,6 +28,7 @@
 
 #include <vector>
 #include <string>
+#include <map>
 
 #include <srs_app_st.hpp>
 #include <srs_app_reload.hpp>
@@ -423,6 +424,9 @@ private:
     SrsBufferListener* https_;
     SrsHttpServeMux* http_api_mux_;
     SrsResourceManager* conn_manager_;
+private:
+    // Key is stream url, value is hybrid thread entry.
+    std::map<std::string, SrsThreadEntry*> hybrids_;
 public:
     SrsApiServer();
     virtual ~SrsApiServer();

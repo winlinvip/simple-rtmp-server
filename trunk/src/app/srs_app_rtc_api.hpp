@@ -70,9 +70,9 @@ class SrsGoApiRtcPublish : public ISrsHttpHandler
 public:
     static uint32_t ssrc_num;
 private:
-    SrsRtcServer* server_;
+    ISrsRtcServer* server_;
 public:
-    SrsGoApiRtcPublish(SrsRtcServer* server);
+    SrsGoApiRtcPublish(ISrsRtcServer* server);
     virtual ~SrsGoApiRtcPublish();
 public:
     virtual srs_error_t serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r);

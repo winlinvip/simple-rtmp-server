@@ -550,6 +550,7 @@ srs_error_t run_hybrid_server(void* arg)
     // The config index for hybrid/stream server.
     int stream_index = (int)(uint64_t)arg;
     _srs_hybrid->set_stream_index(stream_index);
+    srs_assert(_srs_hybrid->stream_index() >= 0);
 
     // Create servers and register them.
     _srs_hybrid->register_server(new SrsServerAdapter());
