@@ -139,6 +139,7 @@ extern std::string srs_config_bool2switch(std::string sbool);
 // @param root the root directive to transform, in and out parameter.
 extern srs_error_t srs_config_transform_vhost(SrsConfDirective* root);
 extern srs_error_t srs_config_transform_vhost2(SrsConfDirective* root);
+extern srs_error_t srs_config_generate_stream(SrsConfDirective* root, SrsConfDirective* tmpl, int nn);
 
 // TODO: FIXME: It should be thread-local or thread-safe.
 // TODO: FIXME: We should use channel to deliver changes of config.
@@ -481,6 +482,7 @@ public:
     virtual int get_threads_async_send();
     virtual bool get_threads_async_tunnel();
     virtual int get_threads_hybrids();
+    virtual bool get_threads_generate_stream();
     virtual bool get_threads_cpu_affinity(std::string label, int* start, int* end);
     virtual int get_threads_max_recv_queue();
     virtual int get_high_threshold();
