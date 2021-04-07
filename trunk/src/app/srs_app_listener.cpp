@@ -669,7 +669,7 @@ srs_error_t SrsUdpMuxListener::cycle()
     set_socket_buffer();
 
     // Sleep infinite if use async_recv.
-    if (_srs_config->get_threads_async_recv()) {
+    if (_srs_config->get_threads_async_recv() > 0) {
         SrsThreadUdpListener* listener = new SrsThreadUdpListener(lfd, handler);
         _srs_async_recv->add_listener(listener);
 

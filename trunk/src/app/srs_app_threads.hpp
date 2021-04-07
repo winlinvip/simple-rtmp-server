@@ -76,6 +76,49 @@ public:
     }
 };
 
+// Thread-safe queue.
+template<typename T>
+class SrsThreadQueue
+{
+private:
+    std::vector<T*> dirty_;
+    SrsThreadMutex* lock_;
+public:
+    // SrsThreadQueue::SrsThreadQueue
+    SrsThreadQueue() {
+        lock_ = new SrsThreadMutex();
+    }
+    // SrsThreadQueue::~SrsThreadQueue
+    virtual ~SrsThreadQueue() {
+        srs_freep(lock_);
+        for (int i = 0; i < (int)dirty_.size(); i++) {
+            T* msg = dirty_.at(i);
+            srs_freep(msg);
+        }
+    }
+public:
+    // SrsThreadQueue::push_back
+    void push_back(T* msg) {
+        SrsThreadLocker(lock_);
+        dirty_.push_back(msg);
+    }
+    // SrsThreadQueue::push_back
+    void push_back(std::vector<T*>& flying) {
+        SrsThreadLocker(lock_);
+        dirty_.insert(dirty_.end(), flying.begin(), flying.end());
+    }
+    // SrsThreadQueue::swap
+    void swap(std::vector<T*>& flying) {
+        SrsThreadLocker(lock_);
+        dirty_.swap(flying);
+    }
+    // SrsThreadQueue::size
+    size_t size() {
+        SrsThreadLocker(lock_);
+        return dirty_.size();
+    }
+};
+
 #ifdef SRS_OSX
     typedef uint64_t cpu_set_t;
     #define CPU_ZERO(p) *p = 0
@@ -105,6 +148,11 @@ public:
     bool cpuset_ok;
 public:
     SrsProcSelfStat* stat;
+public:
+    // The received UDP packets.
+    SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;
+    // The packets cooked by async SRTP manager.
+    SrsThreadQueue<SrsAsyncSRTPPacket>* cooked_packets_;
 public:
     SrsThreadEntry();
     virtual ~SrsThreadEntry();
@@ -154,86 +202,15 @@ public:
     srs_error_t run();
     // Stop the thread pool and quit the primordial thread.
     void stop();
+public:
+    SrsThreadEntry* self();
+    SrsThreadEntry* hybrid();
 private:
     static void* start(void* arg);
 };
 
 // The global thread pool.
 extern SrsThreadPool* _srs_thread_pool;
-
-// We use coroutine queue to collect messages from different coroutines,
-// then swap to the SrsThreadQueue and process by another thread.
-template<typename T>
-class SrsCoroutineQueue
-{
-private:
-    std::vector<T*> dirty_;
-public:
-    SrsCoroutineQueue() {
-    }
-    virtual ~SrsCoroutineQueue() {
-        for (int i = 0; i < (int)dirty_.size(); i++) {
-            T* msg = dirty_.at(i);
-            srs_freep(msg);
-        }
-    }
-public:
-    // SrsCoroutineQueue::push_back
-    void push_back(T* msg) {
-        dirty_.push_back(msg);
-    }
-    // SrsCoroutineQueue::swap
-    void swap(std::vector<T*>& flying) {
-        dirty_.swap(flying);
-    }
-    // SrsCoroutineQueue::size
-    size_t size() {
-        return dirty_.size();
-    }
-};
-
-// Thread-safe queue.
-template<typename T>
-class SrsThreadQueue
-{
-private:
-    std::vector<T*> dirty_;
-    SrsThreadMutex* lock_;
-public:
-    // SrsThreadQueue::SrsThreadQueue
-    SrsThreadQueue() {
-        lock_ = new SrsThreadMutex();
-    }
-    // SrsThreadQueue::~SrsThreadQueue
-    virtual ~SrsThreadQueue() {
-        srs_freep(lock_);
-        for (int i = 0; i < (int)dirty_.size(); i++) {
-            T* msg = dirty_.at(i);
-            srs_freep(msg);
-        }
-    }
-public:
-    // SrsThreadQueue::push_back
-    void push_back(T* msg) {
-        SrsThreadLocker(lock_);
-        dirty_.push_back(msg);
-    }
-    // SrsThreadQueue::push_back
-    void push_back(std::vector<T*>& flying) {
-        SrsThreadLocker(lock_);
-        dirty_.insert(dirty_.end(), flying.begin(), flying.end());
-    }
-    // SrsThreadQueue::swap
-    void swap(std::vector<T*>& flying) {
-        SrsThreadLocker(lock_);
-        dirty_.swap(flying);
-    }
-    // SrsThreadQueue::size
-    size_t size() {
-        SrsThreadLocker(lock_);
-        return dirty_.size();
-    }
-};
 
 // Async file writer, it's thread safe.
 class SrsAsyncFileWriter : public ISrsWriter
@@ -333,6 +310,11 @@ private:
     SrsUdpMuxSocket* sendonly_skt_;
     SrsThreadMutex* lock_;
 public:
+    // The thread entry, to which the listener belongs.
+    SrsThreadEntry* entry_;
+    // For multiple SRTP thread to use the same task to cook packets.
+    SrsThreadMutex* srtp_lock_;
+public:
     SrsAsyncSRTPTask(SrsAsyncSRTP* codec);
     virtual ~SrsAsyncSRTPTask();
 public:
@@ -371,9 +353,6 @@ private:
 private:
     SrsThreadQueue<SrsAsyncSRTPPacket>* srtp_packets_;
 private:
-    // The packets cooked by async SRTP manager.
-    SrsThreadQueue<SrsAsyncSRTPPacket>* cooked_packets_;
-private:
     // Whether enabled tunnel.
     bool tunnel_enabled_;
 public:
@@ -387,13 +366,12 @@ public:
     void on_srtp_codec_destroy(SrsAsyncSRTPTask* task);
     void add_packet(SrsAsyncSRTPPacket* pkt);
     int size();
-    int cooked_size();
     static srs_error_t start(void* arg);
 private:
     srs_error_t do_start();
 public:
     // Consume cooked SRTP packets. Must call in worker/service thread.
-    virtual srs_error_t consume(int* nn_consumed);
+    virtual srs_error_t consume(SrsThreadEntry* entry, int* nn_consumed);
 };
 
 // The global async SRTP manager.
@@ -406,8 +384,14 @@ class SrsThreadUdpListener
 public:
     SrsUdpMuxSocket* skt_;
 public:
+    // The thread entry, to which the listener belongs.
+    SrsThreadEntry* entry_;
+public:
+    SrsThreadUdpListener();
     SrsThreadUdpListener(srs_netfd_t fd, ISrsUdpMuxHandler* handler);
     virtual ~SrsThreadUdpListener();
+public:
+    SrsThreadUdpListener* copy();
 };
 
 // The tunnel for recv to directly consume packets to SRTP decrypt.
@@ -432,8 +416,6 @@ public:
 class SrsAsyncRecvManager
 {
 private:
-    // The received UDP packets.
-    SrsThreadQueue<SrsUdpMuxSocket>* received_packets_;
     // The tunnel for recv to directly consume packets to SRTP decrypt.
     SrsRecvTunnels* tunnels_;
 private:
@@ -459,16 +441,15 @@ public:
     void set_max_recv_queue(int v) { max_recv_queue_ =v; }
     // Add listener to recv from.
     void add_listener(SrsThreadUdpListener* listener);
-    // Get the size of packets queue.
-    int size();
 public:
     // Start the thread.
     static srs_error_t start(void* arg);
 private:
     srs_error_t do_start();
+    void deep_copy_listeners(std::vector<SrsThreadUdpListener*>& cp);
 public:
     // Consume received UDP packets. Must call in worker/service thread.
-    virtual srs_error_t consume(int* nn_consumed);
+    virtual srs_error_t consume(SrsThreadEntry* entry, int* nn_consumed);
 private:
     // Try to consume by tunnel.
     bool consume_by_tunnel(SrsUdpMuxSocket* skt);
