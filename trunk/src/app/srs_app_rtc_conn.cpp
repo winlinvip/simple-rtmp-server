@@ -480,7 +480,7 @@ void SrsRtcPlayStream::on_stream_change(SrsRtcStreamDescription* desc)
 
     // Refresh the relation for video.
     // TODO: FIMXE: Match by label?
-    if (desc && desc->video_track_descs_.size() == 1 && desc->video_track_descs_.size() == 1) {
+    if (desc && desc->video_track_descs_.size() == 1) {
         SrsRtcTrackDescription* vdesc = desc->video_track_descs_.at(0);
         uint32_t ssrc = vdesc->ssrc_;
         SrsRtcVideoSendTrack* track = video_tracks_.begin()->second;
@@ -2138,6 +2138,11 @@ srs_error_t SrsRtcConnection::find_publisher(char* buf, int size, SrsRtcPublishS
 srs_error_t SrsRtcConnection::on_connection_established()
 {
     srs_error_t err = srs_success;
+
+    // Ignore if disposing.
+    if (disposing_) {
+        return err;
+    }
 
     // If DTLS done packet received many times, such as ARQ, ignore.
     if(ESTABLISHED == state_) {
