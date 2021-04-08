@@ -18,51 +18,21 @@
 // COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-package srs
+package vnet
 
 import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"strings"
-
-	"github.com/ossrs/go-oryx-lib/logger"
+	"github.com/pion/transport/vnet"
 )
 
-type statRTC struct {
-	Publishers struct {
-		Expect int `json:"expect"`
-		Alive  int `json:"alive"`
-	} `json:"publishers"`
-	Subscribers struct {
-		Expect int `json:"expect"`
-		Alive  int `json:"alive"`
-	} `json:"subscribers"`
-	PeerConnection interface{} `json:"random-pc"`
+type Router = vnet.Router
+type Net = vnet.Net
+
+type NetConfig = vnet.NetConfig
+type RouterConfig = vnet.RouterConfig
+
+func NewNet(config *NetConfig) *Net {
+	return vnet.NewNet(config)
 }
-
-var StatRTC statRTC
-
-func HandleStat(ctx context.Context, mux *http.ServeMux, l string) {
-	if strings.HasPrefix(l, ":") {
-		l = "127.0.0.1" + l
-	}
-
-	logger.Tf(ctx, "Handle http://%v/api/v1/sb/rtc", l)
-	mux.HandleFunc("/api/v1/sb/rtc", func(w http.ResponseWriter, r *http.Request) {
-		res := &struct {
-			Code int         `json:"code"`
-			Data interface{} `json:"data"`
-		}{
-			0, &StatRTC,
-		}
-
-		b, err := json.Marshal(res)
-		if err != nil {
-			logger.Wf(ctx, "marshal %v err %+v", res, err)
-			return
-		}
-
-		w.Write(b)
-	})
+func NewRouter(config *RouterConfig) (*Router, error) {
+	return vnet.NewRouter(config)
 }

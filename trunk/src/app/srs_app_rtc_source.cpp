@@ -152,10 +152,19 @@ SrsNtp SrsNtp::to_time_ms(uint64_t ntp)
     return srs_ntp;
 }
 
+ISrsRtcStreamChangeCallback::ISrsRtcStreamChangeCallback()
+{
+}
+
+ISrsRtcStreamChangeCallback::~ISrsRtcStreamChangeCallback()
+{
+}
+
 SrsRtcConsumer::SrsRtcConsumer(SrsRtcStream* s)
 {
     source = s;
     should_update_source_id = false;
+    handler_ = NULL;
 
     mw_wait = srs_cond_new();
     mw_min_msgs = 0;
@@ -229,6 +238,13 @@ void SrsRtcConsumer::wait(int nb_msgs)
 
     // use cond block wait for high performance mode.
     srs_cond_wait(mw_wait);
+}
+
+void SrsRtcConsumer::on_stream_change(SrsRtcStreamDescription* desc)
+{
+    if (handler_) {
+        handler_->on_stream_change(desc);
+    }
 }
 
 SrsRtcStreamManager::SrsRtcStreamManager()
@@ -354,24 +370,34 @@ void SrsRtcStream::update_auth(SrsRequest* r)
     req->update_auth(r);
 }
 
-srs_error_t SrsRtcStream::on_source_id_changed(SrsContextId id)
+srs_error_t SrsRtcStream::on_source_changed()
 {
     srs_error_t err = srs_success;
 
-    if (!_source_id.compare(id)) {
-        return err;
+    // Update context id if changed.
+    bool id_changed = false;
+    const SrsContextId& id = _srs_context->get_id();
+    if (_source_id.compare(id)) {
+        id_changed = true;
+
+        if (_pre_source_id.empty()) {
+            _pre_source_id = id;
+        }
+        _source_id = id;
     }
 
-    if (_pre_source_id.empty()) {
-        _pre_source_id = id;
-    }
-    _source_id = id;
-
-    // notice all consumer
+    // Notify all consumers.
     std::vector<SrsRtcConsumer*>::iterator it;
     for (it = consumers.begin(); it != consumers.end(); ++it) {
         SrsRtcConsumer* consumer = *it;
-        consumer->update_source_id();
+
+        // Notify if context id changed.
+        if (id_changed) {
+            consumer->update_source_id();
+        }
+
+        // Notify about stream description.
+        consumer->on_stream_change(stream_desc_);
     }
 
     return err;
@@ -433,6 +459,8 @@ void SrsRtcStream::on_consumer_destroy(SrsRtcConsumer* consumer)
 
 bool SrsRtcStream::can_publish()
 {
+    // TODO: FIXME: Should check the status of bridger.
+    
     return !is_created_;
 }
 
@@ -454,12 +482,6 @@ srs_error_t SrsRtcStream::on_publish()
     is_created_ = true;
     is_delivering_packets_ = true;
 
-    // whatever, the publish thread is the source or edge source,
-    // save its id to srouce id.
-    if ((err = on_source_id_changed(_srs_context->get_id())) != srs_success) {
-        return srs_error_wrap(err, "source id change");
-    }
-
     // Create a new bridger, because it's been disposed when unpublish.
 #ifdef SRS_FFMPEG_FIT
     SrsRtcFromRtmpBridger* impl = new SrsRtcFromRtmpBridger(this);
@@ -469,6 +491,11 @@ srs_error_t SrsRtcStream::on_publish()
 
     bridger_->setup(impl);
 #endif
+
+    // Notify the consumers about stream change event.
+    if ((err = on_source_changed()) != srs_success) {
+        return srs_error_wrap(err, "source id change");
+    }
 
     // TODO: FIXME: Handle by statistic.
 
@@ -1938,7 +1965,9 @@ void SrsRtcVideoRecvTrack::on_before_decode_payload(SrsRtpPacket2* pkt, SrsBuffe
         return;
     }
 
-    uint8_t v = (uint8_t)pkt->nalu_type;
+    uint8_t v = (uint8_t)(buf->head()[0] & kNalTypeMask);
+    pkt->nalu_type = SrsAvcNaluType(v);
+
     if (v == kStapA) {
         *ppayload = new SrsRtpSTAPPayload();
         *ppt = SrsRtpPacketPayloadTypeSTAP;

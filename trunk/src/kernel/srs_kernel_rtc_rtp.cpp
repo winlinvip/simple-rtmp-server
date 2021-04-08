@@ -80,7 +80,7 @@ uint8_t srs_rtp_fast_parse_pt(char* buf, int size)
     }
     return buf[1] & 0x7f;
 }
-srs_error_t srs_rtp_fast_parse_twcc(char* buf, int size, SrsRtpExtensionTypes* ext_types, uint16_t& twcc_sn)
+srs_error_t srs_rtp_fast_parse_twcc(char* buf, int size, uint8_t twcc_id, uint16_t& twcc_sn)
 {
     srs_error_t err = srs_success;
 
@@ -129,8 +129,7 @@ srs_error_t srs_rtp_fast_parse_twcc(char* buf, int size, SrsRtpExtensionTypes* e
         uint8_t id = (v & 0xF0) >>4;
         uint8_t len = (v & 0x0F) + 1;
 
-        SrsRtpExtensionType xtype = ext_types->get_type(id);
-        if(xtype == kRtpExtensionTransportSequenceNumber) {
+        if(id == twcc_id) {
             twcc_sn = ntohs(*((uint16_t*)buf));
             return err;
         } else {
@@ -348,6 +347,7 @@ SrsRtpExtensions::SrsRtpExtensions()
 {
     types_ = NULL;
     has_ext_ = false;
+    decode_twcc_extension_ = false;
 }
 
 SrsRtpExtensions::~SrsRtpExtensions()
@@ -411,21 +411,28 @@ srs_error_t SrsRtpExtensions::decode_0xbede(SrsBuffer* buf)
         // Note that 'len' is the header extension element length, which is the
         // number of bytes - 1.
         uint8_t id = (v & 0xF0) >> 4;
-        uint8_t len = (v & 0x0F);
+        uint8_t len = (v & 0x0F) + 1;
 
         SrsRtpExtensionType xtype = types_? types_->get_type(id) : kRtpExtensionNone;
         if (xtype == kRtpExtensionTransportSequenceNumber) {
-            if ((err = twcc_.decode(buf)) != srs_success) {
-                return srs_error_wrap(err, "decode twcc extension");
+            if (decode_twcc_extension_) {
+                if ((err = twcc_.decode(buf)) != srs_success) {
+                    return srs_error_wrap(err, "decode twcc extension");
+                }
+                has_ext_ = true;
+            } else {
+                if (!buf->require(len+1)) {
+                    return srs_error_new(ERROR_RTC_RTP_MUXER, "requires %d bytes", len+1);
+                }
+                buf->skip(len + 1);
             }
-            has_ext_ = true;
         } else if (xtype == kRtpExtensionAudioLevel) {
             if((err = audio_level_.decode(buf)) != srs_success) {
                 return srs_error_wrap(err, "decode audio level extension");
             }
             has_ext_ = true;
         } else {
-            buf->skip(1 + (len + 1));
+            buf->skip(1 + len);
         }
     }
 
@@ -1028,11 +1035,7 @@ srs_error_t SrsRtpPacket2::decode(SrsBuffer* buf)
     }
     buf->set_size(buf->size() - padding);
 
-    // Try to parse the NALU type for video decoder.
-    if (!buf->empty()) {
-        nalu_type = SrsAvcNaluType((uint8_t)(buf->head()[0] & kNalTypeMask));
-    }
-
+    // TODO: FIXME: We should keep payload to NULL and return if buffer is empty.
     // If user set the decode handler, call it to set the payload.
     if (decode_handler) {
         decode_handler->on_before_decode_payload(this, buf, &payload_, &payload_type_);
@@ -1068,6 +1071,12 @@ SrsRtpRawPayload::SrsRtpRawPayload()
 
 SrsRtpRawPayload::~SrsRtpRawPayload()
 {
+}
+
+bool SrsRtpRawPayload::recycle() 
+{ 
+    payload=NULL; nn_payload=0;
+    return true;    
 }
 
 uint64_t SrsRtpRawPayload::nb_bytes()
@@ -1528,6 +1537,16 @@ SrsRtpFUAPayload2::SrsRtpFUAPayload2()
 
 SrsRtpFUAPayload2::~SrsRtpFUAPayload2()
 {
+}
+
+bool SrsRtpFUAPayload2::recycle()
+{
+    start = end = false;
+    nri = nalu_type = (SrsAvcNaluType)0;
+
+    payload = NULL;
+    size = 0;
+    return true;
 }
 
 uint64_t SrsRtpFUAPayload2::nb_bytes()
