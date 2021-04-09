@@ -1678,6 +1678,18 @@ srs_error_t SrsApiServer::initialize()
         return srs_error_wrap(err, "listen api");
     }
 
+    if ((err = listen_http_api()) != srs_success) {
+        return srs_error_wrap(err, "http api listen");
+    }
+
+    if ((err = listen_https_api()) != srs_success) {
+        return srs_error_wrap(err, "https api listen");
+    }
+
+    if ((err = conn_manager_->start()) != srs_success) {
+        return srs_error_wrap(err, "connection manager");
+    }
+
     return err;
 }
 
@@ -2005,30 +2017,5 @@ srs_error_t SrsApiServer::create_session(
     return err;
 }
 
-srs_error_t SrsApiServer::start(void* arg)
-{
-    SrsApiServer* api = (SrsApiServer*)arg;
-    return api->do_start();
-}
-
-srs_error_t SrsApiServer::do_start()
-{
-    srs_error_t err = srs_success;
-
-    if ((err = listen_http_api()) != srs_success) {
-        return srs_error_wrap(err, "http api listen");
-    }
-
-    if ((err = listen_https_api()) != srs_success) {
-        return srs_error_wrap(err, "https api listen");
-    }
-
-    if ((err = conn_manager_->start()) != srs_success) {
-        return srs_error_wrap(err, "connection manager");
-    }
-
-    srs_usleep(SRS_UTIME_NO_TIMEOUT);
-
-    return err;
-}
+SrsApiServer* _srs_api = new SrsApiServer();
 

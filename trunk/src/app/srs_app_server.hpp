@@ -445,11 +445,10 @@ private:
         bool publish, bool dtls, bool srtp,
         SrsRtcConnection** psession
     );
-public:
-    static srs_error_t start(void* arg);
-private:
-    srs_error_t do_start();
 };
+
+// It's only used in master/srs thread.
+extern SrsApiServer* _srs_api;
 
 // The RTC create session information.
 struct SrsThreadMessageRtcCreateSession

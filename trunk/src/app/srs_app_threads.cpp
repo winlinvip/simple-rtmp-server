@@ -37,6 +37,7 @@
 #include <srs_kernel_rtc_rtp.hpp>
 #include <srs_app_pithy_print.hpp>
 #include <srs_protocol_kbps.hpp>
+#include <srs_app_server.hpp>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -755,6 +756,10 @@ srs_error_t SrsThreadPool::initialize()
         return srs_error_wrap(err, "acquire pid file");
     }
 
+    if ((err = _srs_api->initialize()) != srs_success) {
+        return srs_error_wrap(err, "init api server");
+    }
+
     // Initialize the master primordial thread.
     SrsThreadEntry* entry = (SrsThreadEntry*)entry_;
 #ifndef SRS_OSX
@@ -976,7 +981,7 @@ srs_error_t SrsThreadPool::run()
                 }
             }
 
-            sleep(1);
+            srs_usleep(1 * SRS_UTIME_SECONDS);
         }
 
         // In normal state, gather status and log it.

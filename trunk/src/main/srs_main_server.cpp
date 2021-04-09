@@ -484,14 +484,6 @@ srs_error_t run_in_thread_pool()
         return srs_error_wrap(err, "init thread pool");
     }
 
-    // Create and initialize the API server.
-    SrsApiServer* api = new SrsApiServer();
-    SrsAutoFree(SrsApiServer, api);
-
-    if ((err = api->initialize()) != srs_success) {
-        return srs_error_wrap(err, "init api server");
-    }
-
     // After all init(log, async log manager, thread pool), now we can start to
     // run the log manager thread.
     if ((err = _srs_thread_pool->execute("log", SrsAsyncLogManager::start, _srs_async_log)) != srs_success) {
@@ -520,11 +512,6 @@ srs_error_t run_in_thread_pool()
         if ((err = _srs_thread_pool->execute("send", SrsAsyncSendManager::start, _srs_async_send)) != srs_success) {
             return srs_error_wrap(err, "start async send thread");
         }
-    }
-
-    // Start the api server thread, for server stat and RTC api, etc.
-    if ((err = _srs_thread_pool->execute("api", SrsApiServer::start, api)) != srs_success) {
-        return srs_error_wrap(err, "start api server thread");
     }
 
     // Start a number of hybrid service threads.
