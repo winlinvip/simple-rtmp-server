@@ -419,8 +419,11 @@ srs_error_t SrsHybridServer::on_thread_message(SrsThreadMessage* msg, SrsThreadP
         }
     }
 
-    // TODO: FIXME: Response error?
     if (!adapter) {
+        // TODO: FIXME: Response with error information?
+        srs_error_t r0 = channel->responder()->write(msg, sizeof(SrsThreadMessage), NULL);
+        srs_freep(r0); // Always response it, ignore any error.
+
         return err;
     }
 
@@ -429,8 +432,11 @@ srs_error_t SrsHybridServer::on_thread_message(SrsThreadMessage* msg, SrsThreadP
         err = adapter->rtc->create_session(s->req, s->remote_sdp, s->local_sdp, s->mock_eip,
             s->publish, s->dtls, s->srtp, &s->session);
 
-        // TODO: FIXME: Response error?
         if (err != srs_success) {
+            // TODO: FIXME: Response with error information?
+            srs_error_t r0 = channel->responder()->write(msg, sizeof(SrsThreadMessage), NULL);
+            srs_freep(r0); // Always response it, ignore any error.
+
             return srs_error_wrap(err, "create session");
         }
 
@@ -441,6 +447,10 @@ srs_error_t SrsHybridServer::on_thread_message(SrsThreadMessage* msg, SrsThreadP
         if (err != srs_success) {
             return srs_error_wrap(err, "response");
         }
+    } else {
+        // TODO: FIXME: Response with error information?
+        srs_error_t r0 = channel->responder()->write(msg, sizeof(SrsThreadMessage), NULL);
+        srs_freep(r0); // Always response it, ignore any error.
     }
 
     return err;
