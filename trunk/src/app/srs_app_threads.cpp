@@ -1181,6 +1181,7 @@ srs_error_t SrsAsyncSRTPManager::consume(SrsThreadEntry* entry, int* nn_consumed
     // How many messages to run a yield.
     uint32_t nn_msgs_for_yield = 0;
 
+    // TODO: FIXME: Sort the packets, to avoid NACK.
     vector<SrsAsyncSRTPPacket*> flying_cooked_packets;
     entry->cooked_packets_->swap(flying_cooked_packets);
 
