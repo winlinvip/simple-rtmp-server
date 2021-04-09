@@ -1903,9 +1903,6 @@ srs_error_t SrsAsyncRecvManager::do_start()
 {
     srs_error_t err = srs_success;
 
-    // TODO: FIXME: Config it?
-    srs_utime_t interval = 10 * SRS_UTIME_MILLISECONDS;
-
     // We must deep copy listeners if changed.
     vector<SrsThreadUdpListener*> listeners;
 
@@ -1956,11 +1953,8 @@ srs_error_t SrsAsyncRecvManager::do_start()
             continue;
         }
 
-        // TODO: FIXME: Maybe we should use cond wait?
-        timespec tv = {0};
-        tv.tv_sec = interval / SRS_UTIME_SECONDS;
-        tv.tv_nsec = (interval % SRS_UTIME_SECONDS) * 1000;
-        nanosleep(&tv, NULL);
+        // OK to use ST wait.
+        srs_usleep(10 * SRS_UTIME_MILLISECONDS);
     }
 
     return err;
@@ -2100,9 +2094,6 @@ srs_error_t SrsAsyncSendManager::do_start()
 {
     srs_error_t err = srs_success;
 
-    // TODO: FIXME: Config it?
-    srs_utime_t interval = 10 * SRS_UTIME_MILLISECONDS;
-
     while (true) {
         vector<SrsAsyncUdpPacket*> flying_sending_packets;
         sending_packets_->swap(flying_sending_packets);
@@ -2123,11 +2114,8 @@ srs_error_t SrsAsyncSendManager::do_start()
             continue;
         }
 
-        // TODO: FIXME: Maybe we should use cond wait?
-        timespec tv = {0};
-        tv.tv_sec = interval / SRS_UTIME_SECONDS;
-        tv.tv_nsec = (interval % SRS_UTIME_SECONDS) * 1000;
-        nanosleep(&tv, NULL);
+        // OK to use ST wait.
+        srs_usleep(10 * SRS_UTIME_MILLISECONDS);
     }
 
     return err;

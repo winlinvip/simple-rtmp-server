@@ -331,10 +331,8 @@ int SrsUdpMuxSocket::recvfrom(srs_utime_t timeout)
 
 int SrsUdpMuxSocket::raw_recvfrom()
 {
-    int osfd = srs_netfd_fileno(lfd);
-
     fromlen = sizeof(from);
-    nread = ::recvfrom(osfd, buf, nb_buf, 0, (sockaddr*)&from, (socklen_t*)&fromlen);
+    nread = srs_recvfrom(lfd, buf, nb_buf, (sockaddr*)&from, &fromlen, SRS_UTIME_NO_TIMEOUT);
     if (nread <= 0) {
         return nread;
     }
@@ -389,8 +387,8 @@ srs_error_t SrsUdpMuxSocket::sendto(void* data, int size, srs_utime_t timeout)
     if (nb_write <= 0) {
         if (nb_write < 0 && errno == ETIME) {
             return srs_error_new(ERROR_SOCKET_TIMEOUT, "sendto timeout %d ms", srsu2msi(timeout));
-        }   
-    
+        }
+
         return srs_error_new(ERROR_SOCKET_WRITE, "sendto");
     }
 
@@ -406,8 +404,7 @@ srs_error_t SrsUdpMuxSocket::sendto(void* data, int size, srs_utime_t timeout)
 
 int SrsUdpMuxSocket::raw_sendto(void* data, int size)
 {
-    int osfd = srs_netfd_fileno(lfd);
-    return ::sendto(osfd, data, size, 0, (sockaddr*)&from, (socklen_t)fromlen);
+    return srs_sendto(lfd, data, size, (sockaddr*)&from, fromlen, SRS_UTIME_NO_TIMEOUT);
 }
 
 srs_netfd_t SrsUdpMuxSocket::stfd()
