@@ -695,7 +695,7 @@ srs_error_t SrsRtcFromRtmpBridger::initialize(SrsRequest* r)
         return srs_error_wrap(err, "format initialize");
     }
 
-    int bitrate = 48000;
+    int bitrate = 48000; // The output bitrate in bps.
     if ((err = codec_->initialize(SrsAudioCodecIdAAC, SrsAudioCodecIdOpus, kAudioChannel, kAudioSamplerate, bitrate)) != srs_success) {
         return srs_error_wrap(err, "init codec");
     }

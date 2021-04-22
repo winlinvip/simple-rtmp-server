@@ -232,10 +232,10 @@ srs_error_t SrsAudioTranscoder::init_enc(SrsAudioCodecId dst_codec, int dst_chan
     return srs_success;
 }
 
-srs_error_t SrsAudioTranscoder::init_swr()
+srs_error_t SrsAudioTranscoder::init_swr(AVCodecContext* decoder)
 {
     swr_ = swr_alloc_set_opts(NULL, enc_->channel_layout, enc_->sample_fmt, enc_->sample_rate,
-        dec_->channel_layout, dec_->sample_fmt, dec_->sample_rate, 0, NULL);
+        decoder->channel_layout, decoder->sample_fmt, decoder->sample_rate, 0, NULL);
     if (!swr_) {
         return srs_error_new(ERROR_RTC_RTP_MUXER, "alloc swr");
     }
@@ -298,7 +298,8 @@ srs_error_t SrsAudioTranscoder::decode_and_resample(SrsAudioFrame *pkt)
                 av_make_error_string(err_buf, AV_ERROR_MAX_STRING_SIZE, error));
         }
 
-        if (!swr_ && (err = init_swr()) != srs_success) {
+        // Decoder is OK now, try to init swr if not initialized.
+        if (!swr_ && (err = init_swr(dec_)) != srs_success) {
             return srs_error_wrap(err, "resample init");
         }
 

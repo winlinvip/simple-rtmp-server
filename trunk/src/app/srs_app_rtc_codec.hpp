@@ -85,7 +85,7 @@ public:
 private:
     srs_error_t init_dec(SrsAudioCodecId from);
     srs_error_t init_enc(SrsAudioCodecId to, int channels, int samplerate, int bit_rate);
-    srs_error_t init_swr();
+    srs_error_t init_swr(AVCodecContext* decoder);
     srs_error_t init_fifo();
 
     srs_error_t decode_and_resample(SrsAudioFrame* pkt);

@@ -279,7 +279,7 @@ public:
     virtual void on_unpublish();
     virtual srs_error_t on_audio(SrsSharedPtrMessage* msg);
 private:
-    srs_error_t transcode(SrsAudioFrame* pkt);
+    srs_error_t transcode(SrsAudioFrame* audio);
     srs_error_t package_opus(SrsAudioFrame* audio, SrsRtpPacketCacheHelper* helper);
 public:
     virtual srs_error_t on_video(SrsSharedPtrMessage* msg);
