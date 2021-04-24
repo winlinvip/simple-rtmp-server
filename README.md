@@ -45,9 +45,8 @@ It's also very easy to build from source:
 **>>> Step 1:** Get SRS.
 
 ```
-git clone https://gitee.com/winlinvip/srs.oschina.git srs &&
-cd srs/trunk && git remote set-url origin https://github.com/ossrs/srs.git && 
-git checkout 4.0release && git pull
+git clone -b 4.0release https://gitee.com/winlinvip/srs.oschina.git srs &&
+cd srs/trunk && git remote set-url origin https://github.com/ossrs/srs.git
 ```
 
 > Note: We use [mirrors(gitee)](#mirrors) here, but it's also ok to `git clone https://github.com/ossrs/srs.git`
