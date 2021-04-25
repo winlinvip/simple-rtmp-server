@@ -1936,6 +1936,7 @@ srs_error_t SrsApiServer::create_session(
 ) {
     srs_error_t err = srs_success;
 
+    // TODO: FIXME: Should update the hybrids for RTMP streams.
     // Serve all connections of a stream, which identified by url, by the same hybrid thread.
     string url = req->get_stream_url();
     SrsThreadEntry* hybrid = NULL;

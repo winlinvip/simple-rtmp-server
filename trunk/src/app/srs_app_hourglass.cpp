@@ -33,15 +33,15 @@ using namespace std;
 
 __thread SrsPps* _srs_pps_timer = NULL;
 
-extern SrsPps* _srs_pps_clock_15ms;
-extern SrsPps* _srs_pps_clock_20ms;
-extern SrsPps* _srs_pps_clock_25ms;
-extern SrsPps* _srs_pps_clock_30ms;
-extern SrsPps* _srs_pps_clock_35ms;
-extern SrsPps* _srs_pps_clock_40ms;
-extern SrsPps* _srs_pps_clock_80ms;
-extern SrsPps* _srs_pps_clock_160ms;
-extern SrsPps* _srs_pps_timer_s;
+extern __thread SrsPps* _srs_pps_clock_15ms;
+extern __thread SrsPps* _srs_pps_clock_20ms;
+extern __thread SrsPps* _srs_pps_clock_25ms;
+extern __thread SrsPps* _srs_pps_clock_30ms;
+extern __thread SrsPps* _srs_pps_clock_35ms;
+extern __thread SrsPps* _srs_pps_clock_40ms;
+extern __thread SrsPps* _srs_pps_clock_80ms;
+extern __thread SrsPps* _srs_pps_clock_160ms;
+extern __thread SrsPps* _srs_pps_timer_s;
 
 ISrsHourGlass::ISrsHourGlass()
 {
