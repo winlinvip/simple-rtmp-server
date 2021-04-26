@@ -571,7 +571,7 @@ srs_error_t SrsRtcStream::on_rtp(SrsRtpPacket2* pkt)
     srs_error_t err = srs_success;
 
     // If circuit-breaker is dying, drop packet.
-    if (_srs_thread_pool->hybrid_dying_water_level()) {
+    if (_srs_circuit_breaker->hybrid_dying_water_level()) {
         _srs_pps_aloss2->sugar += (int64_t)consumers.size();
         return err;
     }

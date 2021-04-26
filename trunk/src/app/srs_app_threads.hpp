@@ -32,6 +32,7 @@
 #include <srs_app_rtc_conn.hpp>
 #include <srs_app_listener.hpp>
 #include <srs_app_st.hpp>
+#include <srs_app_hourglass.hpp>
 
 #include <pthread.h>
 
@@ -47,6 +48,40 @@ class SrsProcSelfStat;
 class SrsThreadMutex;
 class ISrsThreadResponder;
 struct SrsThreadMessage;
+
+// The circuit breaker to protect server.
+class SrsCircuitBreaker : public ISrsFastTimer
+{
+private:
+    // Reset the water-level when CPU is low for N times.
+    // @note To avoid the CPU change rapidly.
+    int hybrid_high_water_level_;
+    int hybrid_critical_water_level_;
+    int hybrid_dying_water_level_;
+private:
+    // The config for high/critical water level.
+    int high_threshold_;
+    int high_pulse_;
+    int critical_threshold_;
+    int critical_pulse_;
+    int dying_threshold_;
+    int dying_pulse_;
+public:
+    SrsCircuitBreaker();
+    virtual ~SrsCircuitBreaker();
+public:
+    srs_error_t initialize();
+public:
+    // Whether hybrid server water-level is high.
+    bool hybrid_high_water_level();
+    bool hybrid_critical_water_level();
+    bool hybrid_dying_water_level();
+// interface ISrsFastTimer
+private:
+    srs_error_t on_timer(srs_utime_t interval, srs_utime_t tick);
+};
+
+extern __thread SrsCircuitBreaker* _srs_circuit_breaker;
 
 // The pipe wraps the os pipes(fds).
 class SrsPipe
@@ -325,19 +360,6 @@ private:
     // The hybrid server entry, the cpu percent used for circuit breaker.
     SrsThreadEntry* hybrid_;
     std::vector<SrsThreadEntry*> hybrids_;
-    // Reset the water-level when CPU is low for N times.
-    // @note To avoid the CPU change rapidly.
-    int hybrid_high_water_level_;
-    int hybrid_critical_water_level_;
-    int hybrid_dying_water_level_;
-private:
-    // The config for high/critical water level.
-    int high_threshold_;
-    int high_pulse_;
-    int critical_threshold_;
-    int critical_pulse_;
-    int dying_threshold_;
-    int dying_pulse_;
 private:
     // The pid file fd, lock the file write when server is running.
     // @remark the init.d script should cleanup the pid file, when stop service,
@@ -348,10 +370,6 @@ public:
     SrsThreadPool();
     virtual ~SrsThreadPool();
 public:
-    // Whether hybrid server water-level is high.
-    bool hybrid_high_water_level();
-    bool hybrid_critical_water_level();
-    bool hybrid_dying_water_level();
     // Setup the thread-local variables.
     static srs_error_t setup();
     // Initialize the thread pool.

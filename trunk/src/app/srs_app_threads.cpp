@@ -93,6 +93,120 @@ uint64_t srs_covert_cpuset(cpu_set_t v)
 #endif
 }
 
+SrsCircuitBreaker::SrsCircuitBreaker()
+{
+    hybrid_high_water_level_ = 0;
+    hybrid_critical_water_level_ = 0;
+    hybrid_dying_water_level_ = 0;
+
+    high_threshold_ = 0;
+    high_pulse_ = 0;
+    critical_threshold_ = 0;
+    critical_pulse_ = 0;
+    dying_threshold_ = 0;
+    dying_pulse_ = 0;
+}
+
+SrsCircuitBreaker::~SrsCircuitBreaker()
+{
+}
+
+srs_error_t SrsCircuitBreaker::initialize()
+{
+    srs_error_t err = srs_success;
+
+    // Start a timer to stat the data for circuit breaker.
+    _srs_hybrid->timer()->subscribe(1 * SRS_UTIME_SECONDS, this);
+
+    high_threshold_ = _srs_config->get_high_threshold();
+    high_pulse_ = _srs_config->get_high_pulse();
+    critical_threshold_ = _srs_config->get_critical_threshold();
+    critical_pulse_ = _srs_config->get_critical_pulse();
+    dying_threshold_ = _srs_config->get_dying_threshold();
+    dying_pulse_ = _srs_config->get_dying_pulse();
+
+    srs_trace("CircuitBreaker: high=%dx%d, critical=%dx%d, dying=%dx%d",
+        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, dying_pulse_, dying_threshold_);
+
+    return err;
+}
+
+bool SrsCircuitBreaker::hybrid_high_water_level()
+{
+    return hybrid_critical_water_level() || hybrid_high_water_level_;
+}
+
+bool SrsCircuitBreaker::hybrid_critical_water_level()
+{
+    return hybrid_dying_water_level() || hybrid_critical_water_level_;
+}
+
+bool SrsCircuitBreaker::hybrid_dying_water_level()
+{
+    return dying_pulse_ && hybrid_dying_water_level_ >= dying_pulse_;
+}
+
+srs_error_t SrsCircuitBreaker::on_timer(srs_utime_t interval, srs_utime_t tick)
+{
+    srs_error_t err = srs_success;
+
+    SrsThreadEntry* entry = _srs_thread_pool->self();
+    if (!entry->stat) {
+        return err;
+    }
+
+    // For Circuit-Breaker to update the SNMP, ASAP.
+    srs_update_udp_snmp_statistic();
+
+    // Update thread CPUs per 1s.
+    srs_update_thread_proc_stat(entry->stat, entry->tid);
+
+    // Update the Circuit-Breaker by water-level.
+    // Reset the high water-level when CPU is low for N times.
+    if (entry->stat->percent * 100 > high_threshold_) {
+        hybrid_high_water_level_ = high_pulse_;
+    } else if (hybrid_high_water_level_ > 0) {
+        hybrid_high_water_level_--;
+    }
+
+    // Reset the critical water-level when CPU is low for N times.
+    if (entry->stat->percent * 100 > critical_threshold_) {
+        hybrid_critical_water_level_ = critical_pulse_;
+    } else if (hybrid_critical_water_level_ > 0) {
+        hybrid_critical_water_level_--;
+    }
+
+    // Reset the dying water-level when CPU is low for N times.
+    if (entry->stat->percent * 100 > dying_threshold_) {
+        hybrid_dying_water_level_ = srs_min(dying_pulse_ + 1, hybrid_dying_water_level_ + 1);
+    } else if (hybrid_dying_water_level_ > 0) {
+        hybrid_dying_water_level_ = 0;
+    }
+
+    // Show statistics for RTC server.
+    SrsProcSelfStat* u = srs_get_self_proc_stat();
+    // Resident Set Size: number of pages the process has in real memory.
+    int memory = (int)(u->rss * 4 / 1024);
+
+    // The hybrid thread cpu and memory.
+    float thread_percent = entry->stat->percent * 100;
+
+    string circuit_breaker;
+    if (true || hybrid_high_water_level() || hybrid_critical_water_level() || _srs_pps_aloss->r1s() || _srs_pps_rloss->r1s() || _srs_pps_snack2->r10s()) {
+        srs_trace("CircuitBreaker(%s): cpu=%.2f%%,%dMB, thread=%.2f%%, break=%d,%d,%d, cond=%d,%d,%.2f%%, snk=%d,%d,%d",
+            entry->label.c_str(), u->percent * 100, memory, thread_percent,
+            hybrid_high_water_level(), hybrid_critical_water_level(), hybrid_dying_water_level(), // Whether Circuit-Break is enable.
+            _srs_pps_rloss->r1s(), _srs_pps_aloss->r1s(), thread_percent, // The conditions to enable Circuit-Breaker.
+            _srs_pps_snack2->r10s(), _srs_pps_snack3->r10s(), // NACK packet,seqs sent.
+            _srs_pps_snack4->r10s() // NACK drop by Circuit-Break.
+        );
+    }
+
+    return err;
+}
+
+__thread SrsCircuitBreaker* _srs_circuit_breaker = NULL;
+
 SrsPipe::SrsPipe()
 {
     pipes_[0] = pipes_[1] = -1;
@@ -451,16 +565,6 @@ SrsThreadPool::SrsThreadPool()
     entry_ = NULL;
     lock_ = new SrsThreadMutex();
     hybrid_ = NULL;
-    hybrid_high_water_level_ = 0;
-    hybrid_critical_water_level_ = 0;
-    hybrid_dying_water_level_ = 0;
-
-    high_threshold_ = 0;
-    high_pulse_ = 0;
-    critical_threshold_ = 0;
-    critical_pulse_ = 0;
-    dying_threshold_ = 0;
-    dying_pulse_ = 0;
 
     // Add primordial thread, current thread itself.
     SrsThreadEntry* entry = new SrsThreadEntry();
@@ -491,21 +595,6 @@ SrsThreadPool::~SrsThreadPool()
         ::close(pid_fd);
         pid_fd = -1;
     }
-}
-
-bool SrsThreadPool::hybrid_high_water_level()
-{
-    return hybrid_critical_water_level() || hybrid_high_water_level_;
-}
-
-bool SrsThreadPool::hybrid_critical_water_level()
-{
-    return hybrid_dying_water_level() || hybrid_critical_water_level_;
-}
-
-bool SrsThreadPool::hybrid_dying_water_level()
-{
-    return dying_pulse_ && hybrid_dying_water_level_ >= dying_pulse_;
 }
 
 // Thread local objects.
@@ -617,6 +706,9 @@ srs_error_t SrsThreadPool::setup()
 
     // Create the hybrid RTMP/HTTP/RTC server.
     _srs_hybrid = new SrsHybridServer();
+
+    // Create the circuit breaker for each thread.
+    _srs_circuit_breaker = new SrsCircuitBreaker();
 
     // Create the source manager for server.
     _srs_sources = new SrsSourceManager();
@@ -780,12 +872,6 @@ srs_error_t SrsThreadPool::initialize()
 #endif
 
     interval_ = _srs_config->get_threads_interval();
-    high_threshold_ = _srs_config->get_high_threshold();
-    high_pulse_ = _srs_config->get_high_pulse();
-    critical_threshold_ = _srs_config->get_critical_threshold();
-    critical_pulse_ = _srs_config->get_critical_pulse();
-    dying_threshold_ = _srs_config->get_dying_threshold();
-    dying_pulse_ = _srs_config->get_dying_pulse();
     int async_srtp = _srs_config->get_threads_async_srtp();
 
     int recv_queue = _srs_config->get_threads_max_recv_queue();
@@ -798,10 +884,9 @@ srs_error_t SrsThreadPool::initialize()
     _srs_async_recv->set_tunnel_enabled(async_tunnel);
     _srs_async_srtp->set_tunnel_enabled(async_tunnel);
 
-    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", water_level=%dx%d,%dx%d,%dx%d recvQ=%d, aSend=%d, tunnel=%d",
+    srs_trace("Thread #%d(%s): init name=%s, interval=%dms, async_srtp=%d, cpuset=%d/%d-0x%" PRIx64 "/%d-0x%" PRIx64 ", recvQ=%d, aSend=%d, tunnel=%d",
         entry->num, entry->label.c_str(), entry->name.c_str(), srsu2msi(interval_), async_srtp,
         entry->cpuset_ok, r0, srs_covert_cpuset(entry->cpuset), r1, srs_covert_cpuset(entry->cpuset2),
-        high_pulse_, high_threshold_, critical_pulse_, critical_threshold_, dying_pulse_, dying_threshold_,
         recv_queue, async_send, async_tunnel);
 
     return err;
@@ -943,44 +1028,6 @@ srs_error_t SrsThreadPool::run()
                 }
             }
 
-            // For Circuit-Breaker to update the SNMP, ASAP.
-            srs_update_udp_snmp_statistic();
-
-            // Update thread CPUs per 1s.
-            for (int i = 0; i < (int)threads.size(); i++) {
-                SrsThreadEntry* entry = threads.at(i);
-                if (!entry->tid) {
-                    continue;
-                }
-
-                srs_update_thread_proc_stat(entry->stat, entry->tid);
-            }
-
-            // Update the Circuit-Breaker by water-level.
-            // TODO: FIXME: Should stat all hybrid servers.
-            if (hybrid_ && hybrid_->stat) {
-                // Reset the high water-level when CPU is low for N times.
-                if (hybrid_->stat->percent * 100 > high_threshold_) {
-                    hybrid_high_water_level_ = high_pulse_;
-                } else if (hybrid_high_water_level_ > 0) {
-                    hybrid_high_water_level_--;
-                }
-
-                // Reset the critical water-level when CPU is low for N times.
-                if (hybrid_->stat->percent * 100 > critical_threshold_) {
-                    hybrid_critical_water_level_ = critical_pulse_;
-                } else if (hybrid_critical_water_level_ > 0) {
-                    hybrid_critical_water_level_--;
-                }
-
-                // Reset the dying water-level when CPU is low for N times.
-                if (hybrid_->stat->percent * 100 > dying_threshold_) {
-                    hybrid_dying_water_level_ = srs_min(dying_pulse_ + 1, hybrid_dying_water_level_ + 1);
-                } else if (hybrid_dying_water_level_ > 0) {
-                    hybrid_dying_water_level_ = 0;
-                }
-            }
-
             srs_usleep(1 * SRS_UTIME_SECONDS);
         }
 
@@ -1011,16 +1058,8 @@ srs_error_t SrsThreadPool::run()
             tunnel_desc = buf;
         }
 
-        // Show statistics for RTC server.
-        SrsProcSelfStat* u = srs_get_self_proc_stat();
-        // Resident Set Size: number of pages the process has in real memory.
-        int memory = (int)(u->rss * 4 / 1024);
-
         // The hybrid thread cpu and memory.
-        float thread_percent = 0.0f, top_percent = 0.0f;
-        if (hybrid_ && hybrid_->stat) {
-            thread_percent = hybrid_->stat->percent * 100;
-        }
+        float top_percent = 0.0f;
         for (int i = 0; i < (int)threads.size(); i++) {
             SrsThreadEntry* entry = threads.at(i);
             if (!entry->stat || entry->stat->percent <= 0) {
@@ -1029,20 +1068,14 @@ srs_error_t SrsThreadPool::run()
             top_percent = srs_max(top_percent, entry->stat->percent * 100);
         }
 
-        string circuit_breaker;
-        if (hybrid_high_water_level() || hybrid_critical_water_level() || _srs_pps_aloss->r1s() || _srs_pps_rloss->r1s() || _srs_pps_snack2->r10s()) {
-            snprintf(buf, sizeof(buf), ", break=%d,%d,%d, cond=%d,%d,%.2f%%, snk=%d,%d,%d",
-                hybrid_high_water_level(), hybrid_critical_water_level(), hybrid_dying_water_level(), // Whether Circuit-Break is enable.
-                _srs_pps_rloss->r1s(), _srs_pps_aloss->r1s(), thread_percent, // The conditions to enable Circuit-Breaker.
-                _srs_pps_snack2->r10s(), _srs_pps_snack3->r10s(), // NACK packet,seqs sent.
-                _srs_pps_snack4->r10s() // NACK drop by Circuit-Break.
-            );
-            circuit_breaker = buf;
-        }
+        // Show statistics for RTC server.
+        SrsProcSelfStat* u = srs_get_self_proc_stat();
+        // Resident Set Size: number of pages the process has in real memory.
+        int memory = (int)(u->rss * 4 / 1024);
 
-        srs_trace("Process: cpu=%.2f%%,%dMB, threads=%d,%.2f%%,%.2f%%%s%s%s%s%s",
-            u->percent * 100, memory, (int)threads_.size(), top_percent, thread_percent,
-            async_logs.c_str(), sync_desc.c_str(), queue_desc.c_str(), circuit_breaker.c_str(),
+        srs_trace("Process: cpu=%.2f%%,%dMB, threads=%d,%.2f%%%%s%s%s%s",
+            u->percent * 100, memory, (int)threads_.size(), top_percent,
+            async_logs.c_str(), sync_desc.c_str(), queue_desc.c_str(),
             tunnel_desc.c_str());
     }
 

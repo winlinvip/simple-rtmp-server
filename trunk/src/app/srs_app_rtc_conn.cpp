@@ -1321,7 +1321,7 @@ srs_error_t SrsRtcPublishStream::do_on_rtp_plaintext(SrsRtpPacket2*& pkt, SrsBuf
     }
 
     // If circuit-breaker is enabled, disable nack.
-    if (_srs_thread_pool->hybrid_critical_water_level()) {
+    if (_srs_circuit_breaker->hybrid_critical_water_level()) {
         ++_srs_pps_snack4->sugar;
         return err;
     }
@@ -1573,7 +1573,7 @@ srs_error_t SrsRtcPublishStream::notify(int type, srs_utime_t interval, srs_utim
         ++_srs_pps_twcc->sugar;
 
         // If circuit-breaker is dropping packet, disable TWCC.
-        if (_srs_thread_pool->hybrid_critical_water_level()) {
+        if (_srs_circuit_breaker->hybrid_critical_water_level()) {
             ++_srs_pps_snack4->sugar;
             return err;
         }
@@ -2432,7 +2432,7 @@ srs_error_t SrsRtcConnection::notify(int type, srs_utime_t interval, srs_utime_t
     // For publisher to send NACK.
     if (type == SRS_TICKID_SEND_NACKS) {
         // If circuit-breaker is enabled, disable nack.
-        if (_srs_thread_pool->hybrid_critical_water_level()) {
+        if (_srs_circuit_breaker->hybrid_critical_water_level()) {
             ++_srs_pps_snack4->sugar;
             return err;
         }

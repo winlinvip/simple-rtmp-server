@@ -556,6 +556,12 @@ srs_error_t run_hybrid_server(void* arg)
         return srs_error_wrap(err, "hybrid initialize");
     }
 
+    // Initialize the circuit breaker, which depends on hybrid timer.
+    // TODO: Enable the circuit breaker for API and LOG threads.
+    if ((err = _srs_circuit_breaker->initialize()) != srs_success) {
+        return srs_error_wrap(err, "circuit breaker init");
+    }
+
     // Should run util hybrid servers all done.
     if ((err = _srs_hybrid->run()) != srs_success) {
         return srs_error_wrap(err, "hybrid run");
