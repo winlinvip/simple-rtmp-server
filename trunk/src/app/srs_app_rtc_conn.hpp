@@ -65,6 +65,8 @@ class SrsErrorPithyPrint;
 class SrsPithyPrint;
 class SrsStatistic;
 class SrsRtcUserConfig;
+class SrsRtcSendTrack;
+class SrsRtcPublishStream;
 
 const uint8_t kSR   = 200;
 const uint8_t kRR   = 201;
@@ -211,8 +213,8 @@ public:
 };
 
 // A RTC play stream, client pull and play stream from SRS.
-class SrsRtcPlayStream : virtual public ISrsCoroutineHandler, virtual public ISrsReloadHandler
-    , virtual public ISrsHourGlass, virtual public ISrsRtcPLIWorkerHandler, public ISrsRtcStreamChangeCallback
+class SrsRtcPlayStream : public ISrsCoroutineHandler, public ISrsReloadHandler
+    , public ISrsRtcPLIWorkerHandler, public ISrsRtcStreamChangeCallback
 {
 private:
     SrsContextId cid_;
@@ -222,12 +224,19 @@ private:
 private:
     SrsRequest* req_;
     SrsRtcStream* source_;
-    SrsHourGlass* timer_;
     // key: publish_ssrc, value: send track to process rtp/rtcp
     std::map<uint32_t, SrsRtcAudioSendTrack*> audio_tracks_;
     std::map<uint32_t, SrsRtcVideoSendTrack*> video_tracks_;
     // The pithy print for special stage.
     SrsErrorPithyPrint* nack_epp;
+private:
+    // Fast cache for tracks.
+    uint32_t cache_ssrc0_;
+    uint32_t cache_ssrc1_;
+    uint32_t cache_ssrc2_;
+    SrsRtcSendTrack* cache_track0_;
+    SrsRtcSendTrack* cache_track1_;
+    SrsRtcSendTrack* cache_track2_;
 private:
     // For merged-write messages.
     int mw_msgs;
@@ -261,9 +270,6 @@ private:
 public:
     // Directly set the status of track, generally for init to set the default value.
     void set_all_tracks_status(bool status);
-// interface ISrsHourGlass
-public:
-    virtual srs_error_t notify(int type, srs_utime_t interval, srs_utime_t tick);
 public:
     srs_error_t on_rtcp(SrsRtcpCommon* rtcp);
 private:
@@ -277,13 +283,43 @@ public:
     virtual srs_error_t do_request_keyframe(uint32_t ssrc, SrsContextId cid);
 };
 
-// A RTC publish stream, client push and publish stream to SRS.
-class SrsRtcPublishStream : virtual public ISrsHourGlass, virtual public ISrsRtpPacketDecodeHandler
-    , virtual public ISrsRtcPublishStream, virtual public ISrsRtcPLIWorkerHandler
+// A fast timer for publish stream, for RTCP feedback.
+class SrsRtcPublishRtcpTimer : public ISrsFastTimer
 {
 private:
+    SrsRtcPublishStream* p_;
+public:
+    SrsRtcPublishRtcpTimer(SrsRtcPublishStream* p);
+    virtual ~SrsRtcPublishRtcpTimer();
+// interface ISrsFastTimer
+private:
+    srs_error_t on_timer(srs_utime_t interval);
+};
+
+// A fast timer for publish stream, for TWCC feedback.
+class SrsRtcPublishTwccTimer : public ISrsFastTimer
+{
+private:
+    SrsRtcPublishStream* p_;
+public:
+    SrsRtcPublishTwccTimer(SrsRtcPublishStream* p);
+    virtual ~SrsRtcPublishTwccTimer();
+// interface ISrsFastTimer
+private:
+    srs_error_t on_timer(srs_utime_t interval);
+};
+
+// A RTC publish stream, client push and publish stream to SRS.
+class SrsRtcPublishStream : public ISrsRtpPacketDecodeHandler
+    , public ISrsRtcPublishStream, public ISrsRtcPLIWorkerHandler
+{
+private:
+    friend class SrsRtcPublishRtcpTimer;
+    friend class SrsRtcPublishTwccTimer;
+    SrsRtcPublishRtcpTimer* timer_rtcp_;
+    SrsRtcPublishTwccTimer* timer_twcc_;
+private:
     SrsContextId cid_;
-    SrsHourGlass* timer_;
     uint64_t nn_audio_frames;
     SrsRtcPLIWorker* pli_worker_;
     SrsErrorPithyPrint* twcc_epp_;
@@ -346,9 +382,6 @@ private:
 public:
     void request_keyframe(uint32_t ssrc);
     virtual srs_error_t do_request_keyframe(uint32_t ssrc, SrsContextId cid);
-// interface ISrsHourGlass
-public:
-    virtual srs_error_t notify(int type, srs_utime_t interval, srs_utime_t tick);
 public:
     void simulate_nack_drop(int nn);
 private:
@@ -389,16 +422,31 @@ public:
     virtual srs_error_t on_dtls_done() = 0;
 };
 
+// A fast timer for conntion, for NACK feedback.
+class SrsRtcConnectionNackTimer : public ISrsFastTimer
+{
+private:
+    SrsRtcConnection* p_;
+public:
+    SrsRtcConnectionNackTimer(SrsRtcConnection* p);
+    virtual ~SrsRtcConnectionNackTimer();
+// interface ISrsFastTimer
+private:
+    srs_error_t on_timer(srs_utime_t interval);
+};
+
 // A RTC Peer Connection, SDP level object.
 //
 // For performance, we use non-virtual public from resource,
 // see https://stackoverflow.com/questions/3747066/c-cannot-convert-from-base-a-to-derived-type-b-via-virtual-base-a
-class SrsRtcConnection : public ISrsResource
-    , virtual public ISrsHourGlass, virtual public ISrsDisposingHandler
+class SrsRtcConnection : public ISrsResource, public ISrsDisposingHandler
 {
     friend class SrsSecurityTransport;
     friend class SrsRtcPlayStream;
     friend class SrsRtcPublishStream;
+private:
+    friend class SrsRtcConnectionNackTimer;
+    SrsRtcConnectionNackTimer* timer_nack_;
 public:
     bool disposing_;
     SrsRtcConnectionStatistic* stat_;
@@ -407,7 +455,6 @@ private:
     SrsRtcServer* server_;
     SrsRtcConnectionStateType state_;
     ISrsRtcTransport* transport_;
-    SrsHourGlass* timer_;
 private:
     iovec* cache_iov_;
     SrsBuffer* cache_buffer_;
@@ -449,6 +496,8 @@ private:
     SrsErrorPithyPrint* pp_address_change;
     // Pithy print for PLI request.
     SrsErrorPithyPrint* pli_epp;
+private:
+    bool nack_enabled_;
 public:
     SrsRtcConnection(SrsRtcServer* s, const SrsContextId& cid);
     virtual ~SrsRtcConnection();
@@ -506,9 +555,6 @@ public:
     bool is_alive();
     void alive();
     void update_sendonly_socket(SrsUdpMuxSocket* skt);
-// interface ISrsHourGlass
-public:
-    virtual srs_error_t notify(int type, srs_utime_t interval, srs_utime_t tick);
 public:
     // send rtcp
     srs_error_t send_rtcp(char *data, int nb_data);
