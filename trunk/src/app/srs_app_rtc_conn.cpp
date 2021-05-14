@@ -612,9 +612,9 @@ srs_error_t SrsRtcPlayStream::cycle()
             srs_freep(err);
         }
 
-        // Free the packet.
+        // Release the packet to cache.
         // @remark Note that the pkt might be set to NULL.
-        srs_freep(pkt);
+        _srs_rtp_cache->recycle(pkt);
     }
 }
 
@@ -1287,7 +1287,10 @@ srs_error_t SrsRtcPublishStream::on_rtp_plaintext(char* plaintext, int nb_plaint
     }
 
     // Allocate packet form cache.
-    SrsRtpPacket2* pkt = new SrsRtpPacket2();
+    SrsRtpPacket2* pkt = _srs_rtp_cache->allocate();
+
+    // It's better to reset it before decode it.
+    pkt->reset();
 
     // Copy the packet body.
     char* p = pkt->wrap(plaintext, nb_plaintext);
@@ -1298,9 +1301,9 @@ srs_error_t SrsRtcPublishStream::on_rtp_plaintext(char* plaintext, int nb_plaint
     // @remark Note that the pkt might be set to NULL.
     err = do_on_rtp_plaintext(pkt, &buf);
 
-    // Free the packet.
+    // Release the packet to cache.
     // @remark Note that the pkt might be set to NULL.
-    srs_freep(pkt);
+    _srs_rtp_cache->recycle(pkt);
 
     return err;
 }

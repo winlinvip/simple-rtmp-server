@@ -55,7 +55,7 @@ SrsRtpRingBuffer::~SrsRtpRingBuffer()
 {
     for (int i = 0; i < capacity_; ++i) {
         SrsRtpPacket2* pkt = queue_[i];
-        srs_freep(pkt);
+        _srs_rtp_cache->recycle(pkt);
     }
     srs_freepa(queue_);
 }
@@ -80,7 +80,10 @@ void SrsRtpRingBuffer::advance_to(uint16_t seq)
 void SrsRtpRingBuffer::set(uint16_t at, SrsRtpPacket2* pkt)
 {
     SrsRtpPacket2* p = queue_[at % capacity_];
-    srs_freep(p);
+
+    if (p) {
+        _srs_rtp_cache->recycle(p);
+    }
 
     queue_[at % capacity_] = pkt;
 }
@@ -167,7 +170,7 @@ void SrsRtpRingBuffer::clear_histroy(uint16_t seq)
     for (uint16_t i = 0; i < capacity_; i++) {
         SrsRtpPacket2* p = queue_[i];
         if (p && p->header.get_sequence() < seq) {
-            srs_freep(p);
+            _srs_rtp_cache->recycle(p);
             queue_[i] = NULL;
         }
     }
@@ -178,7 +181,7 @@ void SrsRtpRingBuffer::clear_all_histroy()
     for (uint16_t i = 0; i < capacity_; i++) {
         SrsRtpPacket2* p = queue_[i];
         if (p) {
-            srs_freep(p);
+            _srs_rtp_cache->recycle(p);
             queue_[i] = NULL;
         }
     }
