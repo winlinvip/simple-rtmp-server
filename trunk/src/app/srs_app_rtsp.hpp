@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #ifndef SRS_APP_RTSP_HPP
 #define SRS_APP_RTSP_HPP
@@ -39,7 +22,7 @@ class SrsRtspConn;
 class SrsRtspStack;
 class SrsRtspCaster;
 class SrsConfDirective;
-class SrsRtpPacket;
+class SrsRtspPacket;
 class SrsRequest;
 class SrsStSocket;
 class SrsRtmpClient;
@@ -60,7 +43,7 @@ private:
     SrsPithyPrint* pprint;
     SrsUdpListener* listener;
     SrsRtspConn* rtsp;
-    SrsRtpPacket* cache;
+    SrsRtspPacket* cache;
     int stream_id;
     int _port;
 public:
@@ -153,14 +136,14 @@ private:
     virtual srs_error_t do_cycle();
 // internal methods
 public:
-    virtual srs_error_t on_rtp_packet(SrsRtpPacket* pkt, int stream_id);
+    virtual srs_error_t on_rtp_packet(SrsRtspPacket* pkt, int stream_id);
 // Interface ISrsOneCycleThreadHandler
 public:
     virtual srs_error_t cycle();
 private:
-    virtual srs_error_t on_rtp_video(SrsRtpPacket* pkt, int64_t dts, int64_t pts);
-    virtual srs_error_t on_rtp_audio(SrsRtpPacket* pkt, int64_t dts);
-    virtual srs_error_t kickoff_audio_cache(SrsRtpPacket* pkt, int64_t dts);
+    virtual srs_error_t on_rtp_video(SrsRtspPacket* pkt, int64_t dts, int64_t pts);
+    virtual srs_error_t on_rtp_audio(SrsRtspPacket* pkt, int64_t dts);
+    virtual srs_error_t kickoff_audio_cache(SrsRtspPacket* pkt, int64_t dts);
 private:
     virtual srs_error_t write_sequence_header();
     virtual srs_error_t write_h264_sps_pps(uint32_t dts, uint32_t pts);

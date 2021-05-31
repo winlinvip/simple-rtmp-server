@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2020 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2020 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_threads.hpp>
 
@@ -31,9 +14,12 @@
 #include <srs_app_source.hpp>
 #include <srs_app_pithy_print.hpp>
 #include <srs_app_rtc_server.hpp>
+#include <srs_app_log.hpp>
+
+#ifdef SRS_RTC
 #include <srs_app_rtc_dtls.hpp>
 #include <srs_app_rtc_conn.hpp>
-#include <srs_app_log.hpp>
+#endif
 
 #include <string>
 using namespace std;
@@ -43,18 +29,14 @@ extern ISrsContext* _srs_context;
 extern SrsConfig* _srs_config;
 
 extern SrsStageManager* _srs_stages;
+
+#ifdef SRS_RTC
 extern SrsRtcBlackhole* _srs_blackhole;
 extern SrsResourceManager* _srs_rtc_manager;
 
-extern SrsRtpObjectCacheManager<SrsRtpPacket2>* _srs_rtp_cache;
-extern SrsRtpObjectCacheManager<SrsRtpRawPayload>* _srs_rtp_raw_cache;
-extern SrsRtpObjectCacheManager<SrsRtpFUAPayload2>* _srs_rtp_fua_cache;
-
-extern SrsRtpObjectCacheManager<SrsSharedPtrMessage>* _srs_rtp_msg_cache_buffers;
-extern SrsRtpObjectCacheManager<SrsSharedPtrMessage>* _srs_rtp_msg_cache_objs;
-
 extern SrsResourceManager* _srs_rtc_manager;
 extern SrsDtlsCertificate* _srs_rtc_dtls_certificate;
+#endif
 
 #include <srs_protocol_kbps.hpp>
 
@@ -166,7 +148,6 @@ extern SrsPps* _srs_pps_objs_rraw;
 extern SrsPps* _srs_pps_objs_rfua;
 extern SrsPps* _srs_pps_objs_rbuf;
 extern SrsPps* _srs_pps_objs_rothers;
-extern SrsPps* _srs_pps_objs_drop;
 
 SrsCircuitBreaker::SrsCircuitBreaker()
 {
@@ -262,12 +243,24 @@ srs_error_t SrsCircuitBreaker::on_timer(srs_utime_t interval)
     // The hybrid thread cpu and memory.
     float thread_percent = stat->percent * 100;
 
-    if (enabled_ && (hybrid_high_water_level() || hybrid_critical_water_level() || _srs_pps_snack2->r10s())) {
-        srs_trace("CircuitBreaker: cpu=%.2f%%,%dMB, break=%d,%d,%d, cond=%.2f%%, snk=%d,%d,%d",
+    static char buf[128];
+
+    string snk_desc;
+#ifdef SRS_RTC
+    if (_srs_pps_snack2->r10s()) {
+        snprintf(buf, sizeof(buf), ", snk=%d,%d,%d",
+            _srs_pps_snack2->r10s(), _srs_pps_snack3->r10s(), _srs_pps_snack4->r10s() // NACK packet,seqs sent.
+        );
+        snk_desc = buf;
+    }
+#endif
+
+    if (enabled_ && (hybrid_high_water_level() || hybrid_critical_water_level())) {
+        srs_trace("CircuitBreaker: cpu=%.2f%%,%dMB, break=%d,%d,%d, cond=%.2f%%%s",
             u->percent * 100, memory,
             hybrid_high_water_level(), hybrid_critical_water_level(), hybrid_dying_water_level(), // Whether Circuit-Break is enable.
             thread_percent, // The conditions to enable Circuit-Breaker.
-            _srs_pps_snack2->r10s(), _srs_pps_snack3->r10s(), _srs_pps_snack4->r10s() // NACK packet,seqs sent.
+            snk_desc.c_str()
         );
     }
 
@@ -299,22 +292,17 @@ srs_error_t srs_thread_initialize()
 
     // The global objects which depends on ST.
     _srs_hybrid = new SrsHybridServer();
-    _srs_rtc_sources = new SrsRtcStreamManager();
-    _srs_sources = new SrsSourceManager();
+    _srs_sources = new SrsLiveSourceManager();
     _srs_stages = new SrsStageManager();
-    _srs_blackhole = new SrsRtcBlackhole();
-    _srs_rtc_manager = new SrsResourceManager("RTC", true);
     _srs_circuit_breaker = new SrsCircuitBreaker();
 
-    _srs_rtp_cache = new SrsRtpObjectCacheManager<SrsRtpPacket2>(sizeof(SrsRtpPacket2));
-    _srs_rtp_raw_cache = new SrsRtpObjectCacheManager<SrsRtpRawPayload>(sizeof(SrsRtpRawPayload));
-    _srs_rtp_fua_cache = new SrsRtpObjectCacheManager<SrsRtpFUAPayload2>(sizeof(SrsRtpFUAPayload2));
-
-    _srs_rtp_msg_cache_buffers = new SrsRtpObjectCacheManager<SrsSharedPtrMessage>(sizeof(SrsSharedPtrMessage) + kRtpPacketSize);
-    _srs_rtp_msg_cache_objs = new SrsRtpObjectCacheManager<SrsSharedPtrMessage>(sizeof(SrsSharedPtrMessage));
+#ifdef SRS_RTC
+    _srs_rtc_sources = new SrsRtcSourceManager();
+    _srs_blackhole = new SrsRtcBlackhole();
 
     _srs_rtc_manager = new SrsResourceManager("RTC", true);
     _srs_rtc_dtls_certificate = new SrsDtlsCertificate();
+#endif
 
     // Initialize global pps, which depends on _srs_clock
     _srs_pps_ids = new SrsPps();
@@ -323,7 +311,10 @@ srs_error_t srs_thread_initialize()
     _srs_pps_dispose = new SrsPps();
 
     _srs_pps_timer = new SrsPps();
+    _srs_pps_conn = new SrsPps();
+    _srs_pps_pub = new SrsPps();
 
+#ifdef SRS_RTC
     _srs_pps_snack = new SrsPps();
     _srs_pps_snack2 = new SrsPps();
     _srs_pps_snack3 = new SrsPps();
@@ -335,6 +326,7 @@ srs_error_t srs_thread_initialize()
     _srs_pps_rnack2 = new SrsPps();
     _srs_pps_rhnack = new SrsPps();
     _srs_pps_rmnack = new SrsPps();
+#endif
 
 #if defined(SRS_DEBUG) && defined(SRS_DEBUG_STATS)
     _srs_pps_recvfrom = new SrsPps();
@@ -392,16 +384,12 @@ srs_error_t srs_thread_initialize()
     _srs_pps_fast_addrs = new SrsPps();
 
     _srs_pps_spkts = new SrsPps();
+    _srs_pps_objs_msgs = new SrsPps();
 
+#ifdef SRS_RTC
     _srs_pps_sstuns = new SrsPps();
     _srs_pps_srtcps = new SrsPps();
     _srs_pps_srtps = new SrsPps();
-
-    _srs_pps_pli = new SrsPps();
-    _srs_pps_twcc = new SrsPps();
-    _srs_pps_rr = new SrsPps();
-    _srs_pps_pub = new SrsPps();
-    _srs_pps_conn = new SrsPps();
 
     _srs_pps_rstuns = new SrsPps();
     _srs_pps_rrtps = new SrsPps();
@@ -409,14 +397,16 @@ srs_error_t srs_thread_initialize()
 
     _srs_pps_aloss2 = new SrsPps();
 
-    _srs_pps_objs_msgs = new SrsPps();
+    _srs_pps_pli = new SrsPps();
+    _srs_pps_twcc = new SrsPps();
+    _srs_pps_rr = new SrsPps();
 
     _srs_pps_objs_rtps = new SrsPps();
     _srs_pps_objs_rraw = new SrsPps();
     _srs_pps_objs_rfua = new SrsPps();
     _srs_pps_objs_rbuf = new SrsPps();
     _srs_pps_objs_rothers = new SrsPps();
-    _srs_pps_objs_drop = new SrsPps();
+#endif
 
     return err;
 }

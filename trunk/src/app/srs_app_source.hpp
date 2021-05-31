@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #ifndef SRS_APP_SOURCE_HPP
 #define SRS_APP_SOURCE_HPP
@@ -38,10 +21,10 @@
 
 class SrsFormat;
 class SrsRtmpFormat;
-class SrsConsumer;
+class SrsLiveConsumer;
 class SrsPlayEdge;
 class SrsPublishEdge;
-class SrsSource;
+class SrsLiveSource;
 class SrsCommonMessage;
 class SrsOnMetaDataPacket;
 class SrsSharedPtrMessage;
@@ -157,8 +140,8 @@ public:
     // @max_count the max count to dequeue, must be positive.
     virtual srs_error_t dump_packets(int max_count, SrsSharedPtrMessage** pmsgs, int& count);
     // Dumps packets to consumer, use specified args.
-    // @remark the atc/tba/tbv/ag are same to SrsConsumer.enqueue().
-    virtual srs_error_t dump_packets(SrsConsumer* consumer, bool atc, SrsRtmpJitterAlgorithm ag);
+    // @remark the atc/tba/tbv/ag are same to SrsLiveConsumer.enqueue().
+    virtual srs_error_t dump_packets(SrsLiveConsumer* consumer, bool atc, SrsRtmpJitterAlgorithm ag);
 private:
     // Remove a gop from the front.
     // if no iframe found, clear it.
@@ -182,12 +165,12 @@ public:
     virtual void wakeup() = 0;
 };
 
-// The consumer for SrsSource, that is a play client.
-class SrsConsumer : virtual public ISrsWakable
+// The consumer for SrsLiveSource, that is a play client.
+class SrsLiveConsumer : public ISrsWakable
 {
 private:
     SrsRtmpJitter* jitter;
-    SrsSource* source;
+    SrsLiveSource* source;
     SrsMessageQueue* queue;
     bool paused;
     // when source id changed, notice all consumers
@@ -201,8 +184,8 @@ private:
     srs_utime_t mw_duration;
 #endif
 public:
-    SrsConsumer(SrsSource* s);
-    virtual ~SrsConsumer();
+    SrsLiveConsumer(SrsLiveSource* s);
+    virtual ~SrsLiveConsumer();
 public:
     // Set the size of queue.
     virtual void set_queue_size(srs_utime_t queue_size);
@@ -279,7 +262,7 @@ public:
     // clear the gop cache.
     virtual void clear();
     // dump the cached gop to consumer.
-    virtual srs_error_t dump(SrsConsumer* consumer, bool atc, SrsRtmpJitterAlgorithm jitter_algorithm);
+    virtual srs_error_t dump(SrsLiveConsumer* consumer, bool atc, SrsRtmpJitterAlgorithm jitter_algorithm);
     // used for atc to get the time of gop cache,
     // The atc will adjust the sequence header timestamp to gop cache.
     virtual bool empty();
@@ -294,16 +277,16 @@ public:
 // The handler to handle the event of srs source.
 // For example, the http flv streaming module handle the event and
 // mount http when rtmp start publishing.
-class ISrsSourceHandler
+class ISrsLiveSourceHandler
 {
 public:
-    ISrsSourceHandler();
-    virtual ~ISrsSourceHandler();
+    ISrsLiveSourceHandler();
+    virtual ~ISrsLiveSourceHandler();
 public:
     // when stream start publish, mount stream.
-    virtual srs_error_t on_publish(SrsSource* s, SrsRequest* r) = 0;
+    virtual srs_error_t on_publish(SrsLiveSource* s, SrsRequest* r) = 0;
     // when stream stop publish, unmount stream.
-    virtual void on_unpublish(SrsSource* s, SrsRequest* r) = 0;
+    virtual void on_unpublish(SrsLiveSource* s, SrsRequest* r) = 0;
 };
 
 // The mix queue to correct the timestamp for mix_correct algorithm.
@@ -328,7 +311,7 @@ public:
 class SrsOriginHub : public ISrsReloadHandler
 {
 private:
-    SrsSource* source;
+    SrsLiveSource* source;
     SrsRequest* req;
     bool is_active;
 private:
@@ -356,7 +339,7 @@ public:
 public:
     // Initialize the hub with source and request.
     // @param r The request object, managed by source.
-    virtual srs_error_t initialize(SrsSource* s, SrsRequest* r);
+    virtual srs_error_t initialize(SrsLiveSource* s, SrsRequest* r);
     // Dispose the hub, release utilities resource,
     // For example, delete all HLS pieces.
     virtual void dispose();
@@ -433,7 +416,7 @@ public:
     // Dumps cached metadata to consumer.
     // @param dm Whether dumps the metadata.
     // @param ds Whether dumps the sequence header.
-    virtual srs_error_t dumps(SrsConsumer* consumer, bool atc, SrsRtmpJitterAlgorithm ag, bool dm, bool ds);
+    virtual srs_error_t dumps(SrsLiveConsumer* consumer, bool atc, SrsRtmpJitterAlgorithm ag, bool dm, bool ds);
 public:
     // Previous exists sequence header.
     virtual SrsSharedPtrMessage* previous_vsh();
@@ -451,26 +434,26 @@ public:
 };
 
 // The source manager to create and refresh all stream sources.
-class SrsSourceManager : public ISrsHourGlass
+class SrsLiveSourceManager : public ISrsHourGlass
 {
 private:
     srs_mutex_t lock;
-    std::map<std::string, SrsSource*> pool;
+    std::map<std::string, SrsLiveSource*> pool;
     SrsHourGlass* timer_;
 public:
-    SrsSourceManager();
-    virtual ~SrsSourceManager();
+    SrsLiveSourceManager();
+    virtual ~SrsLiveSourceManager();
 public:
     virtual srs_error_t initialize();
     //  create source when fetch from cache failed.
     // @param r the client request.
     // @param h the event handler for source.
     // @param pps the matched source, if success never be NULL.
-    virtual srs_error_t fetch_or_create(SrsRequest* r, ISrsSourceHandler* h, SrsSource** pps);
+    virtual srs_error_t fetch_or_create(SrsRequest* r, ISrsLiveSourceHandler* h, SrsLiveSource** pps);
 private:
     // Get the exists source, NULL when not exists.
     // update the request and return the exists source.
-    virtual SrsSource* fetch(SrsRequest* r);
+    virtual SrsLiveSource* fetch(SrsRequest* r);
 public:
     // dispose and cycle all sources.
     virtual void dispose();
@@ -485,14 +468,14 @@ public:
 };
 
 // Global singleton instance.
-extern SrsSourceManager* _srs_sources;
+extern SrsLiveSourceManager* _srs_sources;
 
-// For RTMP2RTC, bridge SrsSource to SrsRtcStream
-class ISrsSourceBridger
+// For RTMP2RTC, bridge SrsLiveSource to SrsRtcSource
+class ISrsLiveSourceBridger
 {
 public:
-    ISrsSourceBridger();
-    virtual ~ISrsSourceBridger();
+    ISrsLiveSourceBridger();
+    virtual ~ISrsLiveSourceBridger();
 public:
     virtual srs_error_t on_publish() = 0;
     virtual srs_error_t on_audio(SrsSharedPtrMessage* audio) = 0;
@@ -501,8 +484,7 @@ public:
 };
 
 // The live streaming source.
-// TODO: FIXME: Rename to SrsLiveStream.
-class SrsSource : public ISrsReloadHandler
+class SrsLiveSource : public ISrsReloadHandler
 {
     friend class SrsOriginHub;
 private:
@@ -516,7 +498,7 @@ private:
     // deep copy of client request.
     SrsRequest* req;
     // To delivery stream to clients.
-    std::vector<SrsConsumer*> consumers;
+    std::vector<SrsLiveConsumer*> consumers;
     // The time jitter algorithm for vhost.
     SrsRtmpJitterAlgorithm jitter_algorithm;
     // For play, whether use interlaced/mixed algorithm to correct timestamp.
@@ -533,9 +515,9 @@ private:
     // The time of the packet we just got.
     int64_t last_packet_time;
     // The event handler.
-    ISrsSourceHandler* handler;
+    ISrsLiveSourceHandler* handler;
     // The source bridger for other source.
-    ISrsSourceBridger* bridger_;
+    ISrsLiveSourceBridger* bridger_;
     // The edge control service
     SrsPlayEdge* play_edge;
     SrsPublishEdge* publish_edge;
@@ -552,8 +534,8 @@ private:
     // We will remove the source when source die.
     srs_utime_t die_at;
 public:
-    SrsSource();
-    virtual ~SrsSource();
+    SrsLiveSource();
+    virtual ~SrsLiveSource();
 public:
     virtual void dispose();
     virtual srs_error_t cycle();
@@ -561,9 +543,9 @@ public:
     virtual bool expired();
 public:
     // Initialize the hls with handlers.
-    virtual srs_error_t initialize(SrsRequest* r, ISrsSourceHandler* h);
+    virtual srs_error_t initialize(SrsRequest* r, ISrsLiveSourceHandler* h);
     // Bridge to other source, forward packets to it.
-    void set_bridger(ISrsSourceBridger* v);
+    void set_bridger(ISrsLiveSourceBridger* v);
 // Interface ISrsReloadHandler
 public:
     virtual srs_error_t on_reload_vhost_play(std::string vhost);
@@ -601,13 +583,13 @@ public:
 public:
     // Create consumer
     // @param consumer, output the create consumer.
-    virtual srs_error_t create_consumer(SrsConsumer*& consumer);
+    virtual srs_error_t create_consumer(SrsLiveConsumer*& consumer);
     // Dumps packets in cache to consumer.
     // @param ds, whether dumps the sequence header.
     // @param dm, whether dumps the metadata.
     // @param dg, whether dumps the gop cache.
-    virtual srs_error_t consumer_dumps(SrsConsumer* consumer, bool ds = true, bool dm = true, bool dg = true);
-    virtual void on_consumer_destroy(SrsConsumer* consumer);
+    virtual srs_error_t consumer_dumps(SrsLiveConsumer* consumer, bool ds = true, bool dm = true, bool dg = true);
+    virtual void on_consumer_destroy(SrsLiveConsumer* consumer);
     virtual void set_cache(bool enabled);
     virtual SrsRtmpJitterAlgorithm jitter();
 public:

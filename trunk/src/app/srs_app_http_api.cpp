@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_http_api.hpp>
 
@@ -1300,95 +1283,6 @@ srs_error_t SrsGoApiClusters::serve_http(ISrsHttpResponseWriter* w, ISrsHttpMess
     SrsCoWorkers* coworkers = SrsCoWorkers::instance();
     data->set("origin", coworkers->dumps(vhost, coworker, app, stream));
     
-    return srs_api_response(w, r, obj->dumps());
-}
-
-SrsGoApiPerf::SrsGoApiPerf()
-{
-}
-
-SrsGoApiPerf::~SrsGoApiPerf()
-{
-}
-
-srs_error_t SrsGoApiPerf::serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r)
-{
-    srs_error_t err = srs_success;
-
-    SrsJsonObject* obj = SrsJsonAny::object();
-    SrsAutoFree(SrsJsonObject, obj);
-
-    obj->set("code", SrsJsonAny::integer(ERROR_SUCCESS));
-    SrsJsonObject* data = SrsJsonAny::object();
-    obj->set("data", data);
-
-    SrsStatistic* stat = SrsStatistic::instance();
-
-    string target = r->query_get("target");
-    string reset = r->query_get("reset");
-    srs_trace("query target=%s, reset=%s, rtc_stat_enabled=%d", target.c_str(), reset.c_str(),
-        _srs_config->get_rtc_server_perf_stat());
-
-    if (true) {
-        SrsJsonObject* p = SrsJsonAny::object();
-        data->set("query", p);
-
-        p->set("target", SrsJsonAny::str(target.c_str()));
-        p->set("reset", SrsJsonAny::str(reset.c_str()));
-        p->set("help", SrsJsonAny::str("?target=avframes|rtc|rtp|writev_iovs|bytes"));
-        p->set("help2", SrsJsonAny::str("?reset=all"));
-    }
-
-    if (!reset.empty()) {
-        stat->reset_perf();
-        return srs_api_response(w, r, obj->dumps());
-    }
-
-    if (target.empty() || target == "avframes") {
-        SrsJsonObject* p = SrsJsonAny::object();
-        data->set("avframes", p);
-        if ((err = stat->dumps_perf_msgs(p)) != srs_success) {
-            int code = srs_error_code(err); srs_error_reset(err);
-            return srs_api_response_code(w, r, code);
-        }
-    }
-
-    if (target.empty() || target == "rtc") {
-        SrsJsonObject* p = SrsJsonAny::object();
-        data->set("rtc", p);
-        if ((err = stat->dumps_perf_rtc_packets(p)) != srs_success) {
-            int code = srs_error_code(err); srs_error_reset(err);
-            return srs_api_response_code(w, r, code);
-        }
-    }
-
-    if (target.empty() || target == "rtp") {
-        SrsJsonObject* p = SrsJsonAny::object();
-        data->set("rtp", p);
-        if ((err = stat->dumps_perf_rtp_packets(p)) != srs_success) {
-            int code = srs_error_code(err); srs_error_reset(err);
-            return srs_api_response_code(w, r, code);
-        }
-    }
-
-    if (target.empty() || target == "writev_iovs") {
-        SrsJsonObject* p = SrsJsonAny::object();
-        data->set("writev_iovs", p);
-        if ((err = stat->dumps_perf_writev_iovs(p)) != srs_success) {
-            int code = srs_error_code(err); srs_error_reset(err);
-            return srs_api_response_code(w, r, code);
-        }
-    }
-
-    if (target.empty() || target == "bytes") {
-        SrsJsonObject* p = SrsJsonAny::object();
-        data->set("bytes", p);
-        if ((err = stat->dumps_perf_bytes(p)) != srs_success) {
-            int code = srs_error_code(err); srs_error_reset(err);
-            return srs_api_response_code(w, r, code);
-        }
-    }
-
     return srs_api_response(w, r, obj->dumps());
 }
 

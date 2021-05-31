@@ -1,27 +1,10 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Lixin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Lixin
+//
+// SPDX-License-Identifier: MIT
+//
 
-#include <srs_app_rtc_jitbuffer.hpp>
+#include <srs_app_gb28181_jitter.hpp>
 
 #include <srs_kernel_utility.hpp>
 #include <srs_kernel_error.hpp>
@@ -1201,7 +1184,7 @@ SrsRtpFrameBufferEnum SrsRtpJitterBuffer::InsertPacket(uint16_t seq, uint32_t ts
         //CountFrame(*frame);
         // if (previous_state != kStateDecodable &&
         //         previous_state != kStateComplete) {
-        //     /*CountFrame(*frame);*/ //????????????????????�?? by ylr
+        //     /*CountFrame(*frame);
         //     if (continuous) {
         //         // Signal that we have a complete session.
         //         frame_event_->Set();
@@ -1213,7 +1196,7 @@ SrsRtpFrameBufferEnum SrsRtpJitterBuffer::InsertPacket(uint16_t seq, uint32_t ts
     case kDecodableSession: {
         // *retransmitted = (frame->GetNackCount() > 0);
 
-        if (true || continuous) {
+        if (continuous) {
             decodable_frames_.InsertFrame(frame);
             FindAndInsertContinuousFrames(*frame);
         } else {
@@ -1522,7 +1505,9 @@ bool SrsRtpJitterBuffer::NextMaybeIncompleteTimestamp(uint32_t* timestamp)
     SrsRtpFrameBuffer* oldest_frame;
 
     if (decodable_frames_.empty()) {
-        if (incomplete_frames_.size() <= 1) {
+        //in order to solve the problem of bad network, we can wait for more incomplete frames
+        //ex fps=15
+        if (incomplete_frames_.size() < 15) {
             return false;
         }
 

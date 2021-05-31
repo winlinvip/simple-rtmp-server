@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 John
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 John
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_rtc_server.hpp>
 
@@ -289,61 +272,11 @@ srs_error_t SrsRtcServer::initialize()
         return srs_error_wrap(err, "black hole");
     }
 
-    bool rtp_cache_enabled = _srs_config->get_rtc_server_rtp_cache_enabled();
-    uint64_t rtp_cache_pkt_size = _srs_config->get_rtc_server_rtp_cache_pkt_size();
-    uint64_t rtp_cache_payload_size = _srs_config->get_rtc_server_rtp_cache_payload_size();
-    _srs_rtp_cache->setup(rtp_cache_enabled, rtp_cache_pkt_size);
-    _srs_rtp_raw_cache->setup(rtp_cache_enabled, rtp_cache_payload_size);
-    _srs_rtp_fua_cache->setup(rtp_cache_enabled, rtp_cache_payload_size);
-
-    bool rtp_msg_cache_enabled = _srs_config->get_rtc_server_rtp_msg_cache_enabled();
-    uint64_t rtp_msg_cache_msg_size = _srs_config->get_rtc_server_rtp_msg_cache_msg_size();
-    uint64_t rtp_msg_cache_buffer_size = _srs_config->get_rtc_server_rtp_msg_cache_buffer_size();
-    _srs_rtp_msg_cache_buffers->setup(rtp_msg_cache_enabled, rtp_msg_cache_buffer_size);
-    _srs_rtp_msg_cache_objs->setup(rtp_msg_cache_enabled, rtp_msg_cache_msg_size);
-
-    srs_trace("RTC: Object cache init, rtp-cache=(enabled:%d,pkt:%dm-%dw,payload:%dm-%dw-%dw), msg-cache=(enabled:%d,obj:%dm-%dw,buf:%dm-%dw)",
-        rtp_cache_enabled, (int)(rtp_cache_pkt_size/1024/1024), _srs_rtp_cache->capacity()/10000,
-        (int)(rtp_cache_payload_size/1024/1024), _srs_rtp_raw_cache->capacity()/10000, _srs_rtp_fua_cache->capacity()/10000,
-        rtp_msg_cache_enabled, (int)(rtp_msg_cache_msg_size/1024/1024), _srs_rtp_msg_cache_objs->capacity()/10000,
-        (int)(rtp_msg_cache_buffer_size/1024/1024), _srs_rtp_msg_cache_buffers->capacity()/10000);
-
     return err;
 }
 
 srs_error_t SrsRtcServer::on_reload_rtc_server()
 {
-    bool changed = false;
-
-    bool rtp_cache_enabled = _srs_config->get_rtc_server_rtp_cache_enabled();
-    uint64_t rtp_cache_pkt_size = _srs_config->get_rtc_server_rtp_cache_pkt_size();
-    uint64_t rtp_cache_payload_size = _srs_config->get_rtc_server_rtp_cache_payload_size();
-    if (_srs_rtp_cache->enabled() != rtp_cache_enabled) {
-        _srs_rtp_cache->setup(rtp_cache_enabled, rtp_cache_pkt_size);
-        _srs_rtp_raw_cache->setup(rtp_cache_enabled, rtp_cache_payload_size);
-        _srs_rtp_fua_cache->setup(rtp_cache_enabled, rtp_cache_payload_size);
-
-        changed = true;
-    }
-
-    bool rtp_msg_cache_enabled = _srs_config->get_rtc_server_rtp_msg_cache_enabled();
-    uint64_t rtp_msg_cache_msg_size = _srs_config->get_rtc_server_rtp_msg_cache_msg_size();
-    uint64_t rtp_msg_cache_buffer_size = _srs_config->get_rtc_server_rtp_msg_cache_buffer_size();
-    if (_srs_rtp_msg_cache_buffers->enabled() != rtp_msg_cache_enabled) {
-        _srs_rtp_msg_cache_buffers->setup(rtp_msg_cache_enabled, rtp_msg_cache_buffer_size);
-        _srs_rtp_msg_cache_objs->setup(rtp_msg_cache_enabled, rtp_msg_cache_msg_size);
-
-        changed = true;
-    }
-
-    if (changed) {
-        srs_trace("RTC: Object cache reload, rtp-cache=(enabled:%d,pkt:%dm-%dw,payload:%dm-%dw-%dw), msg-cache=(enabled:%d,obj:%dm-%dw,buf:%dm-%dw)",
-            rtp_cache_enabled, (int)(rtp_cache_pkt_size/1024/1024), _srs_rtp_cache->capacity()/10000,
-            (int)(rtp_cache_payload_size/1024/1024), _srs_rtp_raw_cache->capacity()/10000, _srs_rtp_fua_cache->capacity()/10000,
-            rtp_msg_cache_enabled, (int)(rtp_msg_cache_msg_size/1024/1024), _srs_rtp_msg_cache_objs->capacity()/10000,
-            (int)(rtp_msg_cache_buffer_size/1024/1024), _srs_rtp_msg_cache_buffers->capacity()/10000);
-    }
-
     return srs_success;
 }
 
@@ -519,7 +452,7 @@ srs_error_t SrsRtcServer::create_session(SrsRtcUserConfig* ruc, SrsSdp& local_sd
 
     SrsRequest* req = ruc->req_;
 
-    SrsRtcStream* source = NULL;
+    SrsRtcSource* source = NULL;
     if ((err = _srs_rtc_sources->fetch_or_create(req, &source)) != srs_success) {
         return srs_error_wrap(err, "create source");
     }
@@ -659,8 +592,7 @@ srs_error_t SrsRtcServer::on_timer(srs_utime_t interval)
         session->switch_to_context();
 
         string username = session->username();
-        srs_trace("RTC: session destroy by timeout, username=%s, summary: %s", username.c_str(),
-            session->stat_->summary().c_str());
+        srs_trace("RTC: session destroy by timeout, username=%s", username.c_str());
 
         // Use manager to free session and notify other objects.
         _srs_rtc_manager->remove(session);

@@ -33,16 +33,12 @@ echo "Required tools are ok."
 OS_IS_UBUNTU=NO
 function Ubuntu_prepare()
 {
-    if [ $SRS_CUBIE = YES ]; then
-        echo "For cubieboard, please use ubuntu prepare."
-    else
-        uname -v|grep Ubuntu >/dev/null 2>&1
-        ret=$?; if [[ 0 -ne $ret ]]; then
-            # for debian, we think it's ubuntu also.
-            # for example, the wheezy/sid which is debian armv7 linux, can not identified by uname -v.
-            if [[ ! -f /etc/debian_version ]]; then
-                return 0;
-            fi
+    uname -v|grep Ubuntu >/dev/null 2>&1
+    ret=$?; if [[ 0 -ne $ret ]]; then
+        # for debian, we think it's ubuntu also.
+        # for example, the wheezy/sid which is debian armv7 linux, can not identified by uname -v.
+        if [[ ! -f /etc/debian_version ]]; then
+            return 0;
         fi
     fi
 
@@ -99,6 +95,23 @@ function Ubuntu_prepare()
             require_sudoer "sudo apt-get install -y --force-yes valgrind-dbg"
             sudo apt-get install -y --force-yes valgrind-dev; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
             echo "The valgrind-dev is installed."
+        fi
+    fi
+
+    if [[ $SRS_SRT == YES ]]; then
+        echo "SRT enable, install depend tools"
+        tclsh <<< "exit" >/dev/null 2>&1; ret=$?; if [[ 0 -ne $ret ]]; then
+            echo "Installing tcl."
+            require_sudoer "sudo apt-get install -y --force-yes tcl"
+            sudo apt-get install -y --force-yes tcl; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
+            echo "The tcl is installed."
+        fi
+
+        cmake --help >/dev/null 2>&1; ret=$?; if [[ 0 -ne $ret ]]; then
+            echo "Installing cmake."
+            require_sudoer "sudo apt-get install -y --force-yes cmake"
+            sudo apt-get install -y --force-yes cmake; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
+            echo "The cmake is installed."
         fi
     fi
 
@@ -178,6 +191,23 @@ function Centos_prepare()
             require_sudoer "sudo yum install -y valgrind-devel"
             sudo yum install -y valgrind-devel; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
             echo "The valgrind-devel is installed."
+        fi
+    fi
+
+    if [[ $SRS_SRT == YES ]]; then
+        echo "SRT enable, install depend tools"
+        tclsh <<< "exit" >/dev/null 2>&1; ret=$?; if [[ 0 -ne $ret ]]; then
+            echo "Installing tcl."
+            require_sudoer "sudo yum install -y tcl"
+            sudo yum install -y tcl; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
+            echo "The tcl is installed."
+        fi
+
+        cmake --help >/dev/null 2>&1; ret=$?; if [[ 0 -ne $ret ]]; then
+            echo "Installing cmake."
+            require_sudoer "sudo  yum install -y cmake"
+            sudo yum install -y cmake; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
+            echo "The cmake is installed."
         fi
     fi
 
@@ -278,6 +308,23 @@ function OSX_prepare()
         fi
     fi
 
+    if [[ $SRS_SRT == YES ]]; then
+        echo "SRT enable, install depend tools"
+        tclsh <<< "exit" >/dev/null 2>&1; ret=$?; if [[ 0 -ne $ret ]]; then
+            echo "Installing tcl."
+            echo "brew install tcl."
+            brew install tcl; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
+            echo "install tcl success"
+        fi
+
+        cmake --help >/dev/null 2>&1; ret=$?; if [[ 0 -ne $ret ]]; then
+            echo "Installing cmake."
+            echo "brew install cmake."
+            brew install cmake; ret=$?; if [[ 0 -ne $ret ]]; then return $ret; fi
+            echo "install cmake success"
+        fi
+    fi
+
     echo "OSX install tools success"
     return 0
 }
@@ -329,11 +376,9 @@ function _srs_link_file()
 #       directly build on arm/mips, for example, pi or cubie,
 #       export srs-librtmp
 # others is invalid.
-if [[ $OS_IS_UBUNTU = NO && $OS_IS_CENTOS = NO && $OS_IS_OSX = NO ]]; then
-    if [[ $SRS_PI = NO && $SRS_CUBIE = NO && $SRS_CROSS_BUILD = NO ]]; then
-        echo "Your OS `uname -s` is not supported."
-        exit 1
-    fi
+if [[ $OS_IS_UBUNTU = NO && $OS_IS_CENTOS = NO && $OS_IS_OSX = NO && $SRS_CROSS_BUILD = NO ]]; then
+    echo "Your OS `uname -s` is not supported."
+    exit 1
 fi
 
 #####################################################################################
@@ -689,16 +734,34 @@ fi
 # SRT module, https://github.com/ossrs/srs/issues/1147#issuecomment-577469119
 #####################################################################################
 if [[ $SRS_SRT == YES ]]; then
-    if [[ -f /usr/local/lib64/libsrt.a && ! -f ${SRS_OBJS}/srt/lib/libsrt.a ]]; then
-        mkdir -p ${SRS_OBJS}/srt/lib && ln -sf /usr/local/lib64/libsrt.a ${SRS_OBJS}/srt/lib/libsrt.a
-        mkdir -p ${SRS_OBJS}/srt/include && ln -sf /usr/local/include/srt ${SRS_OBJS}/srt/include/
-    fi
-    if [[ -f ${SRS_OBJS}/srt/lib/libsrt.a ]]; then
-        echo "libsrt-1.4.1 is ok.";
+    if [[ -f ${SRS_OBJS}/${SRS_PLATFORM}/srt/lib/libsrt.a ]]; then
+        echo "libsrt-1-fit is ok.";
     else
-        echo "no libsrt, please run in docker ossrs/srs:srt or build from source https://github.com/ossrs/srs/issues/1147#issuecomment-577469119";
-        exit -1;
+        echo "Build srt-1-fit"
+        (
+            if [[ ! -d ${SRS_OBJS}/${SRS_PLATFORM}/openssl/lib/pkgconfig ]]; then
+                echo "OpenSSL pkgconfig no found, build srt-1-fit failed.";
+                exit -1;
+            fi
+            # Always disable c++11 for libsrt, because only the srt-app requres it.
+            LIBSRT_OPTIONS="--disable-app --enable-shared=0 --enable-static --enable-c++11=0"
+            # Start build libsrt.
+            rm -rf ${SRS_OBJS}/${SRS_PLATFORM}/srt-1-fit && cd ${SRS_OBJS}/${SRS_PLATFORM} &&
+            cp -R ../../3rdparty/srt-1-fit srt-1-fit && cd srt-1-fit &&
+            PKG_CONFIG_PATH=../openssl/lib/pkgconfig ./configure --prefix=`pwd`/_release $LIBSRT_OPTIONS &&
+            make ${SRS_JOBS} && make install &&
+            cd .. && rm -rf srt && ln -sf srt-1-fit/_release srt &&
+            # If exists lib64 of libsrt, link it to lib
+            if [[ -d srt/lib64 ]]; then
+                cd srt && ln -sf lib64 lib
+            fi
+        )
+        ret=$?; if [[ $ret -ne 0 ]]; then echo "Build srt-1-fit failed, ret=$ret"; exit $ret; fi
     fi
+    # Always update the links.
+    (cd ${SRS_OBJS}/${SRS_PLATFORM} && rm -rf srt && ln -sf srt-1-fit/_release srt)
+    (cd ${SRS_OBJS} && rm -rf srt && ln -sf ${SRS_PLATFORM}/srt-1-fit/_release srt)
+    if [ ! -f ${SRS_OBJS}/srt/lib/libsrt.a ]; then echo "Build srt-1-fit failed."; exit -1; fi
 fi
 
 #####################################################################################

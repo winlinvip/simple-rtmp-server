@@ -165,8 +165,8 @@ fi
 
 # srt code path
 if [[ $SRS_SRT == YES ]]; then
-    LibSRTRoot="${SRS_WORKDIR}/src/srt"; LibSRTfile="${SRS_OBJS_DIR}/srt/lib/libsrt.a"
-    if [[ $SRS_SHARED_SRT == YES ]]; then LibSRTfile="-lsrt"; fi
+    SrsSRTRoot="${SRS_WORKDIR}/src/srt"
+    LibSRTRoot="${SRS_OBJS_DIR}/srt/include"; LibSRTfile="${SRS_OBJS_DIR}/srt/lib/libsrt.a"
 fi
 
 # For iconv on macOS only, CentOS seems ok.
@@ -244,12 +244,12 @@ PROTOCOL_INCS="src/protocol"; MODULE_DIR=${PROTOCOL_INCS} . auto/modules.sh
 PROTOCOL_OBJS="${MODULE_OBJS[@]}"
 #
 #srt protocol features.
-if [ $SRS_SRT = YES ]; then
+if [[ $SRS_SRT == YES ]]; then
     MODULE_ID="SRT"
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL" "APP")
-    ModuleLibIncs=(${SRS_OBJS_DIR} ${LibSSLRoot})
+    ModuleLibIncs=(${SRS_OBJS_DIR} ${LibSSLRoot} ${LibSRTRoot})
     MODULE_FILES=("srt_server" "srt_handle" "srt_conn" "srt_to_rtmp" "ts_demux" "srt_data")
-    SRT_INCS=${LibSRTRoot}; MODULE_DIR=${LibSRTRoot} . auto/modules.sh
+    SRT_INCS=(${LibSRTRoot} ${SrsSRTRoot}); MODULE_DIR=${SrsSRTRoot} . auto/modules.sh
     SRT_OBJS="${MODULE_OBJS[@]}"
 fi
 
@@ -286,13 +286,10 @@ if [[ $SRS_FFMPEG_FIT == YES ]]; then
     MODULE_FILES+=("srs_app_rtc_codec")
 fi
 if [[ $SRS_GB28181 == YES ]]; then
-    MODULE_FILES+=("srs_app_gb28181" "srs_app_gb28181_sip")
-fi
-if [[ $SRS_GB28181 == YES || $SRS_RTC == YES ]]; then
-    MODULE_FILES+=("srs_app_rtc_jitbuffer")
+    MODULE_FILES+=("srs_app_gb28181" "srs_app_gb28181_sip" "srs_app_gb28181_jitter")
 fi
 if [[ $SRS_GB28181 == YES ]]; then
-    MODULE_FILES+=("srs_app_sip")
+    MODULE_FILES+=("srs_app_gb28181_stack")
     ModuleLibIncs+=(${LibIconvRoot})
 fi
 
@@ -320,7 +317,8 @@ if [[ $SRS_FFMPEG_FIT == YES ]]; then
     ModuleLibIncs+=("${LibFfmpegRoot[*]}")
 fi
 if [[ $SRS_SRT == YES ]]; then
-    ModuleLibIncs+=("${LibSRTRoot[*]}")
+    ModuleLibIncs+=(${LibSRTRoot})
+    ModuleLibIncs+=("${SrsSRTRoot[*]}")
 fi
 MODULE_FILES=("srs_main_server")
 SERVER_INCS="src/main"; MODULE_DIR=${SERVER_INCS} . auto/modules.sh
@@ -335,6 +333,10 @@ if [[ $SRS_RTC == YES ]]; then
 fi
 if [[ $SRS_FFMPEG_FIT == YES ]]; then
     ModuleLibIncs+=("${LibFfmpegRoot[*]}")
+fi
+if [[ $SRS_SRT == YES ]]; then
+    ModuleLibIncs+=(${LibSRTRoot})
+    ModuleLibIncs+=("${SrsSRTRoot[*]}")
 fi
 MODULE_FILES=()
 DEFINES=""
@@ -382,6 +384,8 @@ if [[ $SRS_FFMPEG_FIT == YES ]]; then
     ModuleLibIncs+=("${LibFfmpegRoot[*]}")
 fi
 if [[ $SRS_SRT == YES ]]; then
+    ModuleLibIncs+=(${LibSRTRoot})
+    ModuleLibIncs+=("${SrsSRTRoot[*]}")
     MODULE_OBJS="${MODULE_OBJS} ${SRT_OBJS[@]}"
 fi
 LINK_OPTIONS="${SrsLinkOptions}${SrsGprofLink}${SrsGperfLink}"
@@ -424,7 +428,7 @@ if [ $SRS_UTEST = YES ]; then
         ModuleLibIncs+=("${LibFfmpegRoot[*]}")
     fi
     if [[ $SRS_SRT == YES ]]; then
-        ModuleLibIncs+=("${LibSRTRoot[*]}")
+        ModuleLibIncs+=("${SrsSRTRoot[*]}")
     fi
     ModuleLibFiles=(${LibSTfile} ${LibSSLfile})
     if [[ $SRS_RTC == YES ]]; then
@@ -775,6 +779,11 @@ if [ $SRS_GPROF = YES ]; then
     echo -e "${YELLOW}The gprof(GNU profile tool) is enabled, performance may suffer.${BLACK}"
 else
     echo -e "${GREEN}Note: The gprof(GNU profile tool) is disabled.${BLACK}"
+fi
+if [ $SRS_CROSS_BUILD = YES ]; then
+    echo -e "${YELLOW}The cross-build is enabled.${BLACK}"
+else
+    echo -e "${GREEN}Note: The cross-build is disabled.${BLACK}"
 fi
 if [ $SRS_VALGRIND = YES ]; then
     echo -e "${GREEN}The valgrind is enabled.${BLACK}"

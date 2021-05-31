@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_rtsp.hpp>
 
@@ -53,7 +36,7 @@ SrsRtpConn::SrsRtpConn(SrsRtspConn* r, int p, int sid)
     stream_id = sid;
     // TODO: support listen at <[ip:]port>
     listener = new SrsUdpListener(this, srs_any_address_for_listener(), p);
-    cache = new SrsRtpPacket();
+    cache = new SrsRtspPacket();
     pprint = SrsPithyPrint::create_caster();
 }
 
@@ -83,14 +66,14 @@ srs_error_t SrsRtpConn::on_udp_packet(const sockaddr* from, const int fromlen, c
     if (true) {
         SrsBuffer stream(buf, nb_buf);
         
-        SrsRtpPacket pkt;
+        SrsRtspPacket pkt;
         if ((err = pkt.decode(&stream)) != srs_success) {
             return srs_error_wrap(err, "decode");
         }
         
         if (pkt.chunked) {
             if (!cache) {
-                cache = new SrsRtpPacket();
+                cache = new SrsRtspPacket();
             }
             cache->copy(&pkt);
             cache->payload->append(pkt.payload->bytes(), pkt.payload->length());
@@ -106,7 +89,7 @@ srs_error_t SrsRtpConn::on_udp_packet(const sockaddr* from, const int fromlen, c
             }
         } else {
             srs_freep(cache);
-            cache = new SrsRtpPacket();
+            cache = new SrsRtspPacket();
             cache->reap(&pkt);
         }
     }
@@ -119,7 +102,7 @@ srs_error_t SrsRtpConn::on_udp_packet(const sockaddr* from, const int fromlen, c
     }
     
     // always free it.
-    SrsAutoFree(SrsRtpPacket, cache);
+    SrsAutoFree(SrsRtspPacket, cache);
 
     err = rtsp->on_rtp_packet(cache, stream_id);
     if (err != srs_success) {
@@ -380,7 +363,7 @@ srs_error_t SrsRtspConn::do_cycle()
     return err;
 }
 
-srs_error_t SrsRtspConn::on_rtp_packet(SrsRtpPacket* pkt, int stream_id)
+srs_error_t SrsRtspConn::on_rtp_packet(SrsRtspPacket* pkt, int stream_id)
 {
     srs_error_t err = srs_success;
     
@@ -438,7 +421,7 @@ srs_error_t SrsRtspConn::cycle()
     return err;
 }
 
-srs_error_t SrsRtspConn::on_rtp_video(SrsRtpPacket* pkt, int64_t dts, int64_t pts)
+srs_error_t SrsRtspConn::on_rtp_video(SrsRtspPacket* pkt, int64_t dts, int64_t pts)
 {
     srs_error_t err = srs_success;
     
@@ -457,7 +440,7 @@ srs_error_t SrsRtspConn::on_rtp_video(SrsRtpPacket* pkt, int64_t dts, int64_t pt
     return err;
 }
 
-srs_error_t SrsRtspConn::on_rtp_audio(SrsRtpPacket* pkt, int64_t dts)
+srs_error_t SrsRtspConn::on_rtp_audio(SrsRtspPacket* pkt, int64_t dts)
 {
     srs_error_t err = srs_success;
     
@@ -476,7 +459,7 @@ srs_error_t SrsRtspConn::on_rtp_audio(SrsRtpPacket* pkt, int64_t dts)
     return err;
 }
 
-srs_error_t SrsRtspConn::kickoff_audio_cache(SrsRtpPacket* pkt, int64_t dts)
+srs_error_t SrsRtspConn::kickoff_audio_cache(SrsRtspPacket* pkt, int64_t dts)
 {
     srs_error_t err = srs_success;
     

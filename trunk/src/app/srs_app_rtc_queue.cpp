@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 John
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 John
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_rtc_queue.hpp>
 
@@ -47,15 +30,15 @@ SrsRtpRingBuffer::SrsRtpRingBuffer(int capacity)
     capacity_ = (uint16_t)capacity;
     initialized_ = false;
 
-    queue_ = new SrsRtpPacket2*[capacity_];
-    memset(queue_, 0, sizeof(SrsRtpPacket2*) * capacity);
+    queue_ = new SrsRtpPacket*[capacity_];
+    memset(queue_, 0, sizeof(SrsRtpPacket*) * capacity);
 }
 
 SrsRtpRingBuffer::~SrsRtpRingBuffer()
 {
     for (int i = 0; i < capacity_; ++i) {
-        SrsRtpPacket2* pkt = queue_[i];
-        _srs_rtp_cache->recycle(pkt);
+        SrsRtpPacket* pkt = queue_[i];
+        srs_freep(pkt);
     }
     srs_freepa(queue_);
 }
@@ -77,13 +60,10 @@ void SrsRtpRingBuffer::advance_to(uint16_t seq)
     begin = seq;
 }
 
-void SrsRtpRingBuffer::set(uint16_t at, SrsRtpPacket2* pkt)
+void SrsRtpRingBuffer::set(uint16_t at, SrsRtpPacket* pkt)
 {
-    SrsRtpPacket2* p = queue_[at % capacity_];
-
-    if (p) {
-        _srs_rtp_cache->recycle(p);
-    }
+    SrsRtpPacket* p = queue_[at % capacity_];
+    srs_freep(p);
 
     queue_[at % capacity_] = pkt;
 }
@@ -146,7 +126,7 @@ bool SrsRtpRingBuffer::update(uint16_t seq, uint16_t& nack_first, uint16_t& nack
     return true;
 }
 
-SrsRtpPacket2* SrsRtpRingBuffer::at(uint16_t seq) {
+SrsRtpPacket* SrsRtpRingBuffer::at(uint16_t seq) {
     return queue_[seq % capacity_];
 }
 
@@ -168,9 +148,9 @@ void SrsRtpRingBuffer::clear_histroy(uint16_t seq)
 {
     // TODO FIXME Did not consider loopback
     for (uint16_t i = 0; i < capacity_; i++) {
-        SrsRtpPacket2* p = queue_[i];
+        SrsRtpPacket* p = queue_[i];
         if (p && p->header.get_sequence() < seq) {
-            _srs_rtp_cache->recycle(p);
+            srs_freep(p);
             queue_[i] = NULL;
         }
     }
@@ -179,9 +159,9 @@ void SrsRtpRingBuffer::clear_histroy(uint16_t seq)
 void SrsRtpRingBuffer::clear_all_histroy()
 {
     for (uint16_t i = 0; i < capacity_; i++) {
-        SrsRtpPacket2* p = queue_[i];
+        SrsRtpPacket* p = queue_[i];
         if (p) {
-            _srs_rtp_cache->recycle(p);
+            srs_freep(p);
             queue_[i] = NULL;
         }
     }

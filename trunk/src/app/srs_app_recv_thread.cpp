@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_recv_thread.hpp>
 
@@ -164,7 +147,7 @@ srs_error_t SrsRecvThread::do_cycle()
     return err;
 }
 
-SrsQueueRecvThread::SrsQueueRecvThread(SrsConsumer* consumer, SrsRtmpServer* rtmp_sdk, srs_utime_t tm, SrsContextId parent_cid)
+SrsQueueRecvThread::SrsQueueRecvThread(SrsLiveConsumer* consumer, SrsRtmpServer* rtmp_sdk, srs_utime_t tm, SrsContextId parent_cid)
 	: trd(this, rtmp_sdk, tm, parent_cid)
 {
     _consumer = consumer;
@@ -190,9 +173,6 @@ SrsQueueRecvThread::~SrsQueueRecvThread()
 srs_error_t SrsQueueRecvThread::start()
 {
     srs_error_t err = srs_success;
-
-    SrsStatistic* stat = SrsStatistic::instance();
-    rtmp->set_perf(stat);
     
     if ((err = trd.start()) != srs_success) {
         return srs_error_wrap(err, "queue recv thread");
@@ -281,7 +261,7 @@ void SrsQueueRecvThread::on_stop()
 }
 
 SrsPublishRecvThread::SrsPublishRecvThread(SrsRtmpServer* rtmp_sdk, SrsRequest* _req,
-	int mr_sock_fd, srs_utime_t tm, SrsRtmpConn* conn, SrsSource* source, SrsContextId parent_cid)
+	int mr_sock_fd, srs_utime_t tm, SrsRtmpConn* conn, SrsLiveSource* source, SrsContextId parent_cid)
     : trd(this, rtmp_sdk, tm, parent_cid)
 {
     rtmp = rtmp_sdk;

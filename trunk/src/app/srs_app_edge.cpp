@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #include <srs_app_edge.hpp>
 
@@ -189,7 +172,7 @@ SrsEdgeIngester::~SrsEdgeIngester()
     srs_freep(trd);
 }
 
-srs_error_t SrsEdgeIngester::initialize(SrsSource* s, SrsPlayEdge* e, SrsRequest* r)
+srs_error_t SrsEdgeIngester::initialize(SrsLiveSource* s, SrsPlayEdge* e, SrsRequest* r)
 {
     source = s;
     edge = e;
@@ -468,7 +451,7 @@ void SrsEdgeForwarder::set_queue_size(srs_utime_t queue_size)
     return queue->set_queue_size(queue_size);
 }
 
-srs_error_t SrsEdgeForwarder::initialize(SrsSource* s, SrsPublishEdge* e, SrsRequest* r)
+srs_error_t SrsEdgeForwarder::initialize(SrsLiveSource* s, SrsPublishEdge* e, SrsRequest* r)
 {
     source = s;
     edge = e;
@@ -671,7 +654,7 @@ SrsPlayEdge::~SrsPlayEdge()
     srs_freep(ingester);
 }
 
-srs_error_t SrsPlayEdge::initialize(SrsSource* source, SrsRequest* req)
+srs_error_t SrsPlayEdge::initialize(SrsLiveSource* source, SrsRequest* req)
 {
     srs_error_t err = srs_success;
     
@@ -751,7 +734,7 @@ void SrsPublishEdge::set_queue_size(srs_utime_t queue_size)
     return forwarder->set_queue_size(queue_size);
 }
 
-srs_error_t SrsPublishEdge::initialize(SrsSource* source, SrsRequest* req)
+srs_error_t SrsPublishEdge::initialize(SrsLiveSource* source, SrsRequest* req)
 {
     srs_error_t err = srs_success;
     

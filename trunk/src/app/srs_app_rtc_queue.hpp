@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 John
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 John
+//
+// SPDX-License-Identifier: MIT
+//
 
 #ifndef SRS_APP_RTC_QUEUE_HPP
 #define SRS_APP_RTC_QUEUE_HPP
@@ -33,7 +16,7 @@
 #include <srs_kernel_rtc_rtp.hpp>
 #include <srs_kernel_rtc_rtcp.hpp>
 
-class SrsRtpPacket2;
+class SrsRtpPacket;
 class SrsRtpQueue;
 class SrsRtpRingBuffer;
 
@@ -51,7 +34,7 @@ private:
     // Capacity of the ring-buffer.
     uint16_t capacity_;
     // Ring bufer.
-    SrsRtpPacket2** queue_;
+    SrsRtpPacket** queue_;
     // Increase one when uint16 flip back, for get_extended_highest_sequence.
     uint64_t nn_seq_flip_backs;
     // Whether initialized, because we use uint16 so we can't use -1.
@@ -74,7 +57,7 @@ public:
     // Move the low position of buffer to seq.
     void advance_to(uint16_t seq);
     // Free the packet at position.
-    void set(uint16_t at, SrsRtpPacket2* pkt);
+    void set(uint16_t at, SrsRtpPacket* pkt);
     void remove(uint16_t at);
     // The highest sequence number, calculate the flip back base.
     uint32_t get_extended_highest_sequence();
@@ -82,7 +65,7 @@ public:
     // @return If false, the seq is too old.
     bool update(uint16_t seq, uint16_t& nack_first, uint16_t& nack_last);
     // Get the packet by seq.
-    SrsRtpPacket2* at(uint16_t seq);
+    SrsRtpPacket* at(uint16_t seq);
 public:
     // TODO: FIXME: Refine it?
     void notify_nack_list_full();

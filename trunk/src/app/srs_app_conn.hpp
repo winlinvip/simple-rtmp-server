@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #ifndef SRS_APP_CONN_HPP
 #define SRS_APP_CONN_HPP
@@ -77,7 +60,7 @@ public:
 };
 
 // The resource manager remove resource and delete it asynchronously.
-class SrsResourceManager : virtual public ISrsCoroutineHandler, virtual public ISrsResourceManager
+class SrsResourceManager : public ISrsCoroutineHandler, public ISrsResourceManager
 {
 private:
     std::string label_;
@@ -153,8 +136,8 @@ public:
 };
 
 // Interface for connection that is startable.
-class ISrsStartableConneciton : virtual public ISrsConnection
-    , virtual public ISrsStartable, virtual public ISrsKbpsDelta
+class ISrsStartableConneciton : public ISrsConnection
+    , public ISrsStartable, public ISrsKbpsDelta
 {
 public:
     ISrsStartableConneciton();
@@ -164,7 +147,7 @@ public:
 // The basic connection of SRS, for TCP based protocols,
 // all connections accept from listener must extends from this base class,
 // server will add the connection to manager, and delete it when remove.
-class SrsTcpConnection : virtual public ISrsProtocolReadWriter
+class SrsTcpConnection : public ISrsProtocolReadWriter
 {
 private:
     // The underlayer st fd handler.
@@ -196,7 +179,7 @@ public:
 };
 
 // The SSL connection over TCP transport, in server mode.
-class SrsSslConnection : virtual public ISrsProtocolReadWriter
+class SrsSslConnection : public ISrsProtocolReadWriter
 {
 private:
     // The under-layer plaintext transport.

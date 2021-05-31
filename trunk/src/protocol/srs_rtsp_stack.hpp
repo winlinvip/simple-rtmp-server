@@ -1,32 +1,13 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #ifndef SRS_PROTOCOL_RTSP_HPP
 #define SRS_PROTOCOL_RTSP_HPP
 
 #include <srs_core.hpp>
-
-#if !defined(SRS_EXPORT_LIBRTMP)
 
 #include <string>
 #include <sstream>
@@ -128,7 +109,7 @@ enum SrsRtspTokenState
 
 // The rtp packet.
 // 5. RTP Data Transfer Protocol, @see rfc3550-2003-rtp.pdf, page 12
-class SrsRtpPacket
+class SrsRtspPacket
 {
 public:
     // The version (V): 2 bits
@@ -255,13 +236,13 @@ public:
     // The audio samples, one rtp packets may contains multiple audio samples.
     SrsAudioFrame* audio;
 public:
-    SrsRtpPacket();
-    virtual ~SrsRtpPacket();
+    SrsRtspPacket();
+    virtual ~SrsRtspPacket();
 public:
     // copy the header from src.
-    virtual void copy(SrsRtpPacket* src);
+    virtual void copy(SrsRtspPacket* src);
     // reap the src to this packet, reap the payload.
-    virtual void reap(SrsRtpPacket* src);
+    virtual void reap(SrsRtspPacket* src);
     // decode rtp packet from stream.
     virtual srs_error_t decode(SrsBuffer* stream);
 private:
@@ -575,8 +556,6 @@ private:
     // @param pconsumed, output the token parsed length. NULL to ignore.
     virtual srs_error_t recv_token(std::string& token, SrsRtspTokenState& state, char normal_ch = SRS_RTSP_SP, int* pconsumed = NULL);
 };
-
-#endif
 
 #endif
 

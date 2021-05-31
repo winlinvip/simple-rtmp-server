@@ -1,25 +1,8 @@
-/**
- * The MIT License (MIT)
- *
- * Copyright (c) 2013-2021 Winlin
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+//
+// Copyright (c) 2013-2021 Winlin
+//
+// SPDX-License-Identifier: MIT
+//
 
 #ifndef SRS_APP_EDGE_HPP
 #define SRS_APP_EDGE_HPP
@@ -32,7 +15,7 @@
 
 class SrsStSocket;
 class SrsRtmpServer;
-class SrsSource;
+class SrsLiveSource;
 class SrsRequest;
 class SrsPlayEdge;
 class SrsPublishEdge;
@@ -117,7 +100,7 @@ public:
 class SrsEdgeIngester : public ISrsCoroutineHandler
 {
 private:
-    SrsSource* source;
+    SrsLiveSource* source;
     SrsPlayEdge* edge;
     SrsRequest* req;
     SrsCoroutine* trd;
@@ -127,7 +110,7 @@ public:
     SrsEdgeIngester();
     virtual ~SrsEdgeIngester();
 public:
-    virtual srs_error_t initialize(SrsSource* s, SrsPlayEdge* e, SrsRequest* r);
+    virtual srs_error_t initialize(SrsLiveSource* s, SrsPlayEdge* e, SrsRequest* r);
     virtual srs_error_t start();
     virtual void stop();
     virtual std::string get_curr_origin();
@@ -145,7 +128,7 @@ private:
 class SrsEdgeForwarder : public ISrsCoroutineHandler
 {
 private:
-    SrsSource* source;
+    SrsLiveSource* source;
     SrsPublishEdge* edge;
     SrsRequest* req;
     SrsCoroutine* trd;
@@ -164,7 +147,7 @@ public:
 public:
     virtual void set_queue_size(srs_utime_t queue_size);
 public:
-    virtual srs_error_t initialize(SrsSource* s, SrsPublishEdge* e, SrsRequest* r);
+    virtual srs_error_t initialize(SrsLiveSource* s, SrsPublishEdge* e, SrsRequest* r);
     virtual srs_error_t start();
     virtual void stop();
 // Interface ISrsReusableThread2Handler
@@ -189,7 +172,7 @@ public:
     // Always use the req of source,
     // For we assume all client to edge is invalid,
     // if auth open, edge must valid it from origin, then service it.
-    virtual srs_error_t initialize(SrsSource* source, SrsRequest* req);
+    virtual srs_error_t initialize(SrsLiveSource* source, SrsRequest* req);
     // When client play stream on edge.
     virtual srs_error_t on_client_play();
     // When all client stopped play, disconnect to origin.
@@ -212,7 +195,7 @@ public:
 public:
     virtual void set_queue_size(srs_utime_t queue_size);
 public:
-    virtual srs_error_t initialize(SrsSource* source, SrsRequest* req);
+    virtual srs_error_t initialize(SrsLiveSource* source, SrsRequest* req);
     virtual bool can_publish();
     // When client publish stream on edge.
     virtual srs_error_t on_client_publish();
